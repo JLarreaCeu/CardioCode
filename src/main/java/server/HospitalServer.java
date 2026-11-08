@@ -15,9 +15,12 @@ public class HospitalServer {
 
     public static void main(String[] args) {
         HospitalServer server = new HospitalServer();
-        server.start();
+        server.start(); //abre server
     }
 
+    /**
+     * Abre el puerto y espera clients, cada client con su thread
+     */
     public void start() {
         try {
             serverSocket = new ServerSocket (PORT);
@@ -37,12 +40,21 @@ public class HospitalServer {
             }
         }
     }
+
+    /**
+     * Añade cliente a list
+     * @param client
+     */
      //synchronized hace que solo un thread pueda tocar la lista a la vez , es para quitar race conditions por si 2 clientes entran o salen a la vez
     public synchronized void addClient(ClientHandler client){
         clients.add(client);
         System.out.println("Connected clients: " + clients.size());
     }
 
+    /**
+     * Quita cliente de la list
+     * @param client
+     */
     public synchronized void removeClient (ClientHandler client){
         clients.remove(client);
         System.out.println("Connected clients: " + clients.size());
@@ -52,6 +64,9 @@ public class HospitalServer {
         return clients.size();
     }
 
+    /**
+     * Apaga el server
+     */
     public void shutdown() {
         running = false;
         try {
