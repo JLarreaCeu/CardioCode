@@ -11,9 +11,11 @@ public class ClientHandler implements Runnable {
 
     private Socket socket;
     private SocketConnection connection;
+    private  HospitalServer server;
 
-    public ClientHandler(Socket socket) {
+    public ClientHandler(Socket socket, HospitalServer server) {
         this.socket = socket;
+        this.server = server;
     }
 
     @Override
@@ -40,6 +42,7 @@ public class ClientHandler implements Runnable {
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("Error with client: " + e.getMessage());
         } finally {
+            server.removeClient(this);
             if (connection != null) {
                 connection.close();
             } else {
