@@ -11,7 +11,8 @@ public enum BITalinoErrorTypes {
     THRESHOLD_NOT_VALID(7,"The threshold value must be between 0 and 63"),
     ANALOG_CHANNELS_NOT_VALID(8,"The number of analog channels available are between 0 and 5"),
     INCORRECT_DECODE(9,"Incorrect date to be decoded"),
-    DIGITAL_CHANNELS_NOT_VALID(11, "MAC address not valid"),
+    DIGITAL_CHANNELS_NOT_VALID(10,"To set the digital outputs, the inputs array must have 4 items, one for each channel."),
+    MACADDRESS_NOT_VALID(11, "MAC address not valid"),
     UNDEFINED(12, "UNDEFINED ERROR");
 
     private final int value;
