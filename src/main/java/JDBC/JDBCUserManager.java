@@ -1,6 +1,8 @@
 package JDBC;
 
 import Interfaces.UserManager;
+import POJOs.Role;
+import POJOs.User;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
