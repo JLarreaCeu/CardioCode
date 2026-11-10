@@ -86,6 +86,14 @@ public class HospitalServer {
                 System.out.println("Error closing server: " + e.getMessage());
             }
         }
+
+        List <ClientHandler> copy;
+        synchronized (this) {
+            copy = new ArrayList<>(clients);
+        }
+        for (ClientHandler client : copy){
+            client.closeConnection();
+        }
     }
 
 }

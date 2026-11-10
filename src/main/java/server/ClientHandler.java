@@ -18,6 +18,14 @@ public class ClientHandler implements Runnable {
         this.server = server;
     }
 
+    public void closeConnection(){
+        try{
+            socket.close();
+        }catch (IOException e){
+            System.out.println("Error closing client " + e.getMessage());
+        }
+    }
+
     @Override
     public void run() {
         try {
@@ -27,11 +35,13 @@ public class ClientHandler implements Runnable {
             boolean connected = true;
             while(connected) {
                 Commands command = connection.receiveCommand();
-                System.out.println("Received: " + command);
 
                 if(command == Commands.LOGOUT) {
                     connected = false;
+                } else if(command == Commands.PING){
+                    connection.sendCommand(Commands.OK);
                 } else {
+                    System.out.println("Received: " + command);
                     connection.sendCommand(Commands.OK);
                 }
             }
@@ -54,4 +64,6 @@ public class ClientHandler implements Runnable {
             }
         }
     }
+
+
 }
