@@ -14,8 +14,18 @@ public class HospitalServer {
     private volatile boolean running = true; //volatile me salio investigando es para que todos los hilos vean si el servidor sigue encendido tipo para que los cambios de una var se vean al momento
 
     public static void main(String[] args) {
-        HospitalServer server = new HospitalServer();
-        server.start(); //abre server
+        try {
+            if (AdminConsole.doubleCheck("OPEN")) {
+                HospitalServer server = new HospitalServer();
+                AdminConsole console = new AdminConsole(server);
+                new Thread(console).start();
+                server.start(); //abre server
+            } else {
+                System.out.println("Server not started");
+            }
+        } catch (IOException e) {
+            System.out.println("Error reading input, server not started: " + e.getMessage());
+        }
     }
 
     /**
@@ -69,12 +79,13 @@ public class HospitalServer {
      */
     public void shutdown() {
         running = false;
-        try {
-            serverSocket.close();
-        } catch (IOException e) {
-            System.out.println("Error closing server: " + e.getMessage());
+        if (serverSocket != null) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                System.out.println("Error closing server: " + e.getMessage());
+            }
         }
     }
-
 
 }
