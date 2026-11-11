@@ -68,4 +68,5 @@ public class AdminConsole implements Runnable {
         System.out.println("2. Shut down server");
         System.out.println("Choose an option:");
     }
+    public void pruebaVideo(){}
 }

@@ -1,6 +1,5 @@
 package gui;
 
-
 import Interfaces.UserManager;
 import JDBC.JDBCUserManager;
 import POJOs.Role;
