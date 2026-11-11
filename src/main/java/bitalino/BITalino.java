@@ -1,5 +1,5 @@
 package bitalino;
-/*
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -276,4 +276,4 @@ public Frame[] read(int nSamples)throws BITalinoException{
 }
 
 
-}*/
+}

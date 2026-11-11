@@ -1,5 +1,5 @@
 package bitalino;
-/*
+
 import javax.bluetooth.*;
 import java.util.Vector;
 
@@ -48,4 +48,3 @@ public class DeviceDiscoverer implements DiscoveryListener {
     public void servicesDiscovered(int trnasID, ServiceRecord[]serviceRecord){}
     public void serviceSearchCompleted(int transID, int rescCode){}
 }
-*/
