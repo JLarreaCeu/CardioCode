@@ -1,6 +1,5 @@
 package gui;
 
-
 import Interfaces.UserManager;
 import JDBC.JDBCUserManager;
 import POJOs.Role;
@@ -44,7 +43,7 @@ import java.util.Random;
  *abre el menú de cada rol
  */
 public class GUI {
-
+    
     static UserManager userManager;
 
     public static void main(String[] args) {
