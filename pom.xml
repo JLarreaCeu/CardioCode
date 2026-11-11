@@ -14,11 +14,16 @@
     </properties>
 
     <dependencies>
-        <!-- Conexión Bluetooth con el Bitalino en Mac -->
         <dependency>
             <groupId>com.fazecast</groupId>
             <artifactId>jSerialComm</artifactId>
             <version>2.11.2</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.ultreia</groupId>
+            <artifactId>bluecove</artifactId>
+            <version>2.1.1</version>
         </dependency>
 
         <dependency>
