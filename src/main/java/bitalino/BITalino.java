@@ -1,15 +1,17 @@
 package bitalino;
-
-import com.sun.jdi.connect.Connector;
-
+/*
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.Vector;
+import javax.bluetooth.RemoteDevice;
+import javax.microedition.io.Connector;
+import javax.microedition.io.StreamConnection;
 
 
 public class BITalino {
-/*
-    //auxiliary varible, array with list of analog inputs to be acquired from the device.
+
+    //auxiliary variable, array with list of analog inputs to be acquired from the device.
     private int[] analogChannels = null;
     //auxiliary vairable, number of bytes expected for a frame sent by the device.
     private int number_bytes = 0;
@@ -272,6 +274,6 @@ public Frame[] read(int nSamples)throws BITalinoException{
             throw new BITalinoException(BITalinoErrorTypes.DIGITAL_CHANNELS_NOT_VALID);
         }
 }
-*/
 
-}
+
+}*/
