@@ -330,7 +330,7 @@ public class GUI {
             Label heroTitle = new Label("Your heart,\nmonitored from home.");
             GUI.text(heroTitle, 38, true, Color.WHITE);
 
-            Label heroText = new Label("Log your symptoms and record your ECG with BITalino. "
+            Label heroText = new Label("Log your ptoms and record your ECG with BITalino. "
                     + "Your cardiologists reviews everything from the hospital.");
             GUI.text(heroText, 15, false, Color.rgb(255, 255, 255, 0.88));
             heroText.setWrapText(true);
@@ -398,9 +398,14 @@ public class GUI {
             show(error, true);
         }
 
-        private void showMessage(Label message, String text) {
+        public void showMessage(Label message, String text) {
             message.setText(text);
             show(message, true);
+        }
+
+        /** Mensaje en la pantalla de login (p. ej. "conexión perdida"). Llamar después de showLogin(). */
+        public void showMessage(String text) {
+            showMessage(loginMessage, text);
         }
 
         /** Muestra u oculta algo sin dejar un hueco vacío. */
@@ -642,4 +647,8 @@ public class GUI {
         pane.getChildren().add(ecg);
         return pane;
     }
-}
+
+
+
+  }
+

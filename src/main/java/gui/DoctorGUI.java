@@ -22,6 +22,7 @@ public class DoctorGUI {
     private final User user;
     private final GUI.App mainFrame;
     private final DoctorClient doctorClient;
+    private PingThread pingThread;
 
     private Label message;
 
@@ -30,6 +31,10 @@ public class DoctorGUI {
         this.mainFrame = mainFrame;
         this.doctorClient = doctorClient;
         showDoctorMenu();
+        pingThread = new PingThread(doctorClient,mainFrame);
+        Thread t = new Thread(pingThread);
+        t.setDaemon(true);//para que no impida el cierre de la app
+        t.start();
     }
 
     public void showDoctorMenu() {
@@ -73,6 +78,7 @@ public class DoctorGUI {
 
     /** logout */
     private void logout() {
+        pingThread.stop();
         try {
             doctorClient.logout();
         } catch (IOException e) {

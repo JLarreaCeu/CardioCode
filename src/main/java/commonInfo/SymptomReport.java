@@ -25,6 +25,7 @@ public class SymptomReport implements Serializable {
 
     private int episodeMinutes;         // duración del episodio, en minutos
     private String comments;            // observaciones libres del paciente
+    private String doctorComments;      // comentarios del médico (null hasta que lo revisa)
 
     public SymptomReport() {
     }
@@ -122,6 +123,14 @@ public class SymptomReport implements Serializable {
 
     public void setComments(String comments) {
         this.comments = comments;
+    }
+
+    public String getDoctorComments() {
+        return doctorComments;
+    }
+
+    public void setDoctorComments(String doctorComments) {
+        this.doctorComments = doctorComments;
     }
 
     @Override

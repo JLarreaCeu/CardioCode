@@ -17,6 +17,7 @@ public class DoctorClient implements Pings {
     private final Socket socket;
 
 
+
     /** Se conecta al servidor */
     public DoctorClient(String host) throws IOException {
         socket = new Socket(host, PORT);
