@@ -1,7 +1,7 @@
 package gui;
 
-import Interfaces.UserManager;
-import JDBC.JDBCUserManager;
+import server.db.interfaces.UserManager;
+import server.db.jdbc.JDBCUserManager;
 import POJOs.Role;
 import POJOs.User;
 import doctor.DoctorClient;
