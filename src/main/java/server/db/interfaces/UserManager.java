@@ -1,7 +1,7 @@
 package server.db.interfaces;
 
-import POJOs.Role;
-import POJOs.User;
+import commonInfo.Role;
+import commonInfo.User;
 
 import java.util.List;
 

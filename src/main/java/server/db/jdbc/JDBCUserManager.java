@@ -1,8 +1,8 @@
 package server.db.jdbc;
 
 import server.db.interfaces.UserManager;
-import POJOs.Role;
-import POJOs.User;
+import commonInfo.Role;
+import commonInfo.User;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
