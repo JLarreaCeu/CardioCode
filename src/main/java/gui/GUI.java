@@ -1,9 +1,10 @@
 package gui;
 
 import server.db.interfaces.UserManager;
+import server.db.jdbc.JDBCManager;
 import server.db.jdbc.JDBCUserManager;
-import POJOs.Role;
-import POJOs.User;
+import commonInfo.Role;
+import commonInfo.User;
 import doctor.DoctorClient;
 import patient.PatientClient;
 import javafx.animation.Animation;
@@ -47,8 +48,8 @@ public class GUI {
     static UserManager userManager;
 
     public static void main(String[] args) {
+        new JDBCManager();       // crea la base de datos y las tablas si no existen
         userManager = new JDBCUserManager();
-        userManager.connect();   //base de datos
         Application.launch(App.class, args);
     }
 
@@ -171,9 +172,13 @@ public class GUI {
                 return;
             }
 
-            String role = user.getRole().getDescription().toLowerCase();
+            Role role = user.getRole();
+            if (role == null) {
+                showMessage(loginMessage, "Unknown role. Access denied.");
+                return;
+            }
             switch (role) {
-                case "patient":
+                case PATIENT:
                     try {
                         PatientClient patientClient = new PatientClient(SERVER_ADDRESS);
                         patientMn = new PatientGUI(user, this, patientClient);
@@ -182,7 +187,7 @@ public class GUI {
                     }
                     break;
 
-                case "doctor":
+                case DOCTOR:
                     try {
                         DoctorClient doctorClient = new DoctorClient(SERVER_ADDRESS);
                         doctorMn = new DoctorGUI(user, this, doctorClient);
@@ -271,15 +276,9 @@ public class GUI {
                 return;
             }
 
-            Role role = getPatientRole();
-            if (role == null) {
-                showMessage(signUpMessage, "The Patient role is missing in the database.");
-                return;
-            }
-
             try {
-                byte[] hashedPassword = JDBCUserManager.hashPassword(password);
-                User user = new User(email, hashedPassword, role);
+                // newUser calcula el hash de la contraseña (PasswordHasher)
+                User user = new User(email, password, Role.PATIENT);
                 userManager.newUser(user);
                 if (user.getId() == null) {   //si tiene ID quiere decir que funciona
                     showMessage(signUpMessage, "The account could not be created. Try again.");
@@ -294,15 +293,6 @@ public class GUI {
             newPasswordField.clear();
             confirmField.clear();
             showMessage(signUpMessage, "Account created! You can now sign in.");
-        }
-
-        private Role getPatientRole() {
-            for (Role role : userManager.getRoles()) {
-                if (role.getDescription().equalsIgnoreCase("Patient")) {
-                    return role;
-                }
-            }
-            return null;
         }
 
 

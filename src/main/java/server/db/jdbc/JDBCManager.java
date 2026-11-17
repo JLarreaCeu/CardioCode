@@ -14,18 +14,13 @@ public class JDBCManager {
         private static final Path DB_PATH = Paths.get("db", "base_datos.db");
         private static final String JDBC_URL = "jdbc:sqlite:" + DB_PATH;
 
-        private static final String CREATE_ROLES = """
-            CREATE TABLE IF NOT EXISTS Roles (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                description TEXT NOT NULL UNIQUE
-            )""";
-
+        // El rol se guarda como texto con el nombre del enum Role ("PATIENT" o "DOCTOR")
         private static final String CREATE_USERS = """
             CREATE TABLE IF NOT EXISTS Users (
                 id       INTEGER PRIMARY KEY AUTOINCREMENT,
                 email    TEXT NOT NULL UNIQUE CHECK (email LIKE '%@%'),
                 password BLOB NOT NULL,
-                role_id  INTEGER NOT NULL REFERENCES Roles(id)
+                role     TEXT NOT NULL CHECK (role IN ('PATIENT', 'DOCTOR'))
             )""";
 
         private static final String CREATE_PATIENTS = """
@@ -71,7 +66,6 @@ public class JDBCManager {
             try (Connection conn = getConnection();
                  Statement stmt = conn.createStatement()) {
 
-                stmt.executeUpdate(CREATE_ROLES);
                 stmt.executeUpdate(CREATE_USERS);
                 stmt.executeUpdate(CREATE_PATIENTS);
                 stmt.executeUpdate(CREATE_DOCTORS);
