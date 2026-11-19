@@ -47,6 +47,22 @@ public class JDBCManager {
                 phone     TEXT
             )""";
 
+        private static final String CREATE_SYMPTOM_REPORTS = """
+                    CREATE TABLE IF NOT EXISTS symptom_reports (
+                    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id          INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                    date_time           TEXT NOT NULL,
+                    palpitations        INTEGER NOT NULL CHECK (palpitations IN (0, 1)),
+                    dizziness           INTEGER NOT NULL CHECK (dizziness IN (0, 1)),
+                    shortness_of_breath INTEGER NOT NULL CHECK (shortness_of_breath IN (0, 1)),
+                    chest_pain          INTEGER NOT NULL CHECK (chest_pain IN (0, 1)),
+                    fatigue             INTEGER NOT NULL CHECK (fatigue IN (0, 1)),
+                    episode_minutes     INTEGER NOT NULL DEFAULT 0 CHECK (episode_minutes >= 0),
+                    comments            TEXT,
+                    doctor_comment      TEXT,
+                    doctor_comment_time TEXT
+                )""";
+
         public JDBCManager() {
             try {
                 Files.createDirectories(DB_PATH.getParent());
