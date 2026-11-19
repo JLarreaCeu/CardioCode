@@ -59,6 +59,7 @@ public class JDBCManager {
                 chest_pain          INTEGER NOT NULL CHECK (chest_pain IN (0, 1)),
                 fatigue             INTEGER NOT NULL CHECK (fatigue IN (0, 1)),
                 episode_minutes     INTEGER NOT NULL DEFAULT 0 CHECK (episode_minutes >= 0),
+                comments            TEXT,
                 doctor_comment      TEXT,
                 doctor_comment_time TEXT
             )""";
