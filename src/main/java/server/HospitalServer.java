@@ -1,5 +1,7 @@
 package server;
 
+import server.db.jdbc.JDBCManager;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -15,6 +17,8 @@ public class HospitalServer {
 
     public static void main(String[] args) {
         try {
+            new JDBCManager();
+            AdminConsole.setupAdminPassword();
             if (AdminConsole.doubleCheck("OPEN")) {
                 HospitalServer server = new HospitalServer();
                 AdminConsole console = new AdminConsole(server);

@@ -77,7 +77,7 @@ public class User implements Serializable {
 
     @Override
     public String toString() {
-        // Nunca imprimimos la contraseña
+        // Nunca imprimimos la contraseña, ni siquiera el hash
         return "User " + email + " (" + role + ")";
     }
 }

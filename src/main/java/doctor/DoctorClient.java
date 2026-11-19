@@ -1,12 +1,13 @@
 package doctor;
 
-import POJOs.User;
+import commonInfo.User;
 import commonInfo.Commands;
 import commonInfo.Pings;
 import commonInfo.SocketConnection;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.List;
 
 
 /*conexion of doctor client with hospital server*/
@@ -38,9 +39,9 @@ public class DoctorClient implements Pings {
         }
         return null;
     }
-   //public synchronized Patient getPatients(){
+  // public synchronized List Patient getPatients(){
 
-    //}
+    //
 
 
     public synchronized void logout() throws IOException {

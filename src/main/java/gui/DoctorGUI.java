@@ -1,6 +1,6 @@
 package gui;
 
-import POJOs.User;
+import commonInfo.User;
 import doctor.DoctorClient;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;

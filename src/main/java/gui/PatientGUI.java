@@ -1,6 +1,6 @@
 package gui;
 
-import POJOs.User;
+import commonInfo.User;
 import commonInfo.SymptomReport;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -15,7 +15,6 @@ import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
