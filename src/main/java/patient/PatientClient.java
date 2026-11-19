@@ -85,11 +85,10 @@ public class PatientClient implements Pings {
         con.sendObject(email);
         con.sendObject(password);
         expectConfirmation();
-        loggedUser=(User) receive();
-        return loggedUser;
+        return (User) receive();
     }
 
-    @SuppressWarnings("unchecked")
+
     public synchronized List<Doctor>getDoctors()throws IOException,ServerException{
         con.sendCommand(Commands.GET_DOCTORS);
         expectConfirmation();
