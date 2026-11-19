@@ -20,5 +20,4 @@ public interface DoctorManager {
     /** Todos los médicos, para que el paciente elija al registrarse */
     List<Doctor> getDoctors();
 
-    void updateDoctor(Doctor doctor);
 }

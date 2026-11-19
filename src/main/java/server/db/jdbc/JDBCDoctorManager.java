@@ -57,24 +57,7 @@ public class JDBCDoctorManager implements DoctorManager {
         return queryDoctors(SELECT_DOCTORS + "ORDER BY surname, name", null);
     }
 
-    @Override
-    public void updateDoctor(Doctor doctor) {
-        validate(doctor);
-        if (doctor.getId() == null) {
-            throw new IllegalArgumentException("The doctor is not saved yet");
-        }
-        String sql = "UPDATE doctors SET name = ?, surname = ?, phone = ? WHERE id = ?";
-        try (Connection c = JDBCManager.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, doctor.getName());
-            ps.setString(2, doctor.getSurname());
-            ps.setString(3, doctor.getPhone());
-            ps.setInt(4, doctor.getId());
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            throw new IllegalStateException("Could not update doctor " + doctor.getId(), e);
-        }
-    }
+
 
     /** Comprueba los datos obligatorios antes de guardar. */
     private void validate(Doctor doctor) {

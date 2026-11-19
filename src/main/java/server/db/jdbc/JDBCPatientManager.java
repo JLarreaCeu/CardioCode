@@ -53,10 +53,6 @@ public class JDBCPatientManager implements PatientManager {
         return firstOrNull(queryPatients(SELECT_PATIENTS + "WHERE user_id = ?", userId));
     }
 
-    @Override
-    public List<Patient> getPatients() {
-        return queryPatients(SELECT_PATIENTS, null);
-    }
 
     @Override
     public List<Patient> getPatientsByDoctor(Integer doctorId) {

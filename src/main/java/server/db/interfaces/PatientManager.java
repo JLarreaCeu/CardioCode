@@ -17,8 +17,6 @@ public interface PatientManager {
     /** Para saber qué paciente es quien acaba de hacer login. */
     Patient getPatientByUserId(Integer userId);
 
-    List<Patient> getPatients();
-
     /** Los pacientes que lleva un médico (GET_PATIENTS). */
     List<Patient> getPatientsByDoctor(Integer doctorId);
 
