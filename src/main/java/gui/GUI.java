@@ -181,9 +181,13 @@ public class GUI {
                 case PATIENT:
                     try {
                         PatientClient patientClient = new PatientClient(SERVER_ADDRESS);
+                        // Login también en el servidor, para que sepa qué paciente envía los datos
+                        user = patientClient.login(email, password);
                         patientMn = new PatientGUI(user, this, patientClient);
                     } catch (IOException e) {
                         showMessage(loginMessage, "Can't reach the hospital server.");
+                    } catch (PatientClient.ServerException e) {
+                        showMessage(loginMessage, "The server rejected the login: " + e.getMessage());
                     }
                     break;
 

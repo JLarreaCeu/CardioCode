@@ -1,10 +1,16 @@
 package server;
 
 import commonInfo.Commands;
+import commonInfo.Patient;
 import commonInfo.Role;
 import commonInfo.SocketConnection;
+import commonInfo.SymptomReport;
 import commonInfo.User;
+import server.db.interfaces.PatientManager;
+import server.db.interfaces.SymptomManager;
 import server.db.interfaces.UserManager;
+import server.db.jdbc.JDBCPatientManager;
+import server.db.jdbc.JDBCSymptomManager;
 import server.db.jdbc.JDBCUserManager;
 
 import java.io.EOFException;
@@ -17,12 +23,16 @@ public class ClientHandler implements Runnable {
     private SocketConnection connection;
     private  HospitalServer server;
     private UserManager userManager;
+    private PatientManager patientManager;
+    private SymptomManager symptomManager;
     private User loggedUser;
 
     public ClientHandler(Socket socket, HospitalServer server) {
         this.socket = socket;
         this.server = server;
         this.userManager = new JDBCUserManager();
+        this.patientManager = new JDBCPatientManager();
+        this.symptomManager = new JDBCSymptomManager();
     }
 
     public void closeConnection(){
@@ -54,7 +64,9 @@ public class ClientHandler implements Runnable {
                         connection.sendCommand(Commands.OK);
                     } else if(command == Commands.LOGIN) {
                         handleLogin();
-                    }else if (command == Commands.GET_PATIENTS){
+                    } else if (command == Commands.SEND_SYMPTOMS) {
+                        handleSendSymptoms();
+                    } else if (command == Commands.GET_PATIENTS){
                         if(hasRole(Role.DOCTOR)){
                             sendError("Command not available yet");
                         }
@@ -121,6 +133,38 @@ public class ClientHandler implements Runnable {
                 connection.sendObject(user);
                 System.out.println(user + " logged in");
             }
+        }
+    }
+
+    /**
+     * SEND_SYMPTOMS recibe un SymptomReport y lo guarda. Responde OK o ERROR .
+     */
+    private void handleSendSymptoms() throws IOException, ClassNotFoundException {
+        Object data = connection.receiveObject();
+
+        if (!hasRole(Role.PATIENT)) {
+            return;
+        }
+        if (!(data instanceof SymptomReport)) {
+            sendError("Invalid symptom report");
+            return;
+        }
+
+        Patient patient = patientManager.getPatientByUserId(loggedUser.getId());
+        if (patient == null) {
+            sendError("There is no patient profile for this account");
+            return;
+        }
+
+        SymptomReport report = (SymptomReport) data;
+        report.setPatientId(patient.getId());
+        try {
+            symptomManager.addReport(report);
+            connection.sendCommand(Commands.OK);
+            System.out.println("Symptom report " + report.getId() + " saved for patient " + patient.getId());
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Could not save symptom report: " + e.getMessage());
+            sendError("Could not save the symptom report");
         }
     }
 

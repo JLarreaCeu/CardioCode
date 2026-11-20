@@ -238,10 +238,25 @@ public class PatientGUI {
                     comments.toString()
             );
 
-            // TODO: enviar el informe al servidor (Commands.SEND_SYMPTOMS) cuando PatientClient lo soporte
+
+            try {
+                patientClient.sendSymptoms(report);
+            } catch (PatientClient.ServerException ex) {
+                // El servidor ha contestado ERROR: se queda en el formulario y lo dice
+                formError.setText("The server could not save your symptoms: " + ex.getMessage());
+                formError.setVisible(true);
+                formError.setManaged(true);
+                return;
+            } catch (IOException ex) {
+                formError.setText("Can't reach the hospital server. Try again.");
+                formError.setVisible(true);
+                formError.setManaged(true);
+                return;
+            }
+
             reports.add(report);
             showPatientMenu();
-            showMessage(String.format("Symptoms recorded at %s (offline preview).",
+            showMessage(String.format("Symptoms sent at %s.",
                     report.getDateTime().toLocalTime().withNano(0)));
         });
 
