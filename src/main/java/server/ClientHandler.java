@@ -1,14 +1,11 @@
 package server;
 
-import commonInfo.Commands;
-import commonInfo.Patient;
-import commonInfo.Role;
-import commonInfo.SocketConnection;
-import commonInfo.SymptomReport;
-import commonInfo.User;
+import commonInfo.*;
+import server.db.interfaces.DoctorManager;
 import server.db.interfaces.PatientManager;
 import server.db.interfaces.SymptomManager;
 import server.db.interfaces.UserManager;
+import server.db.jdbc.JDBCDoctorManager;
 import server.db.jdbc.JDBCPatientManager;
 import server.db.jdbc.JDBCSymptomManager;
 import server.db.jdbc.JDBCUserManager;
@@ -16,6 +13,7 @@ import server.db.jdbc.JDBCUserManager;
 import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.ArrayList;
 
 public class ClientHandler implements Runnable {
 
@@ -25,6 +23,7 @@ public class ClientHandler implements Runnable {
     private UserManager userManager;
     private PatientManager patientManager;
     private SymptomManager symptomManager;
+    private DoctorManager doctorManager;
     private User loggedUser;
 
     public ClientHandler(Socket socket, HospitalServer server) {
@@ -32,6 +31,7 @@ public class ClientHandler implements Runnable {
         this.server = server;
         this.userManager = new JDBCUserManager();
         this.patientManager = new JDBCPatientManager();
+        this.doctorManager = new JDBCDoctorManager();
         this.symptomManager = new JDBCSymptomManager();
     }
 
@@ -64,6 +64,10 @@ public class ClientHandler implements Runnable {
                         connection.sendCommand(Commands.OK);
                     } else if(command == Commands.LOGIN) {
                         handleLogin();
+                    } else if(command == Commands.REGISTER_PATIENT) {
+                        handleRegisterPatient();
+                    } else if(command == Commands.GET_DOCTORS) {
+                        handleGetDoctors();
                     } else if (command == Commands.SEND_SYMPTOMS) {
                         handleSendSymptoms();
                     } else if (command == Commands.GET_PATIENTS){
@@ -178,6 +182,63 @@ public class ClientHandler implements Runnable {
             return false;
         }
         return true;
+    }
+
+    /**
+     * REGISTER_PATIENT recibe email y contraseña y Patient. Responde OK + Patient guardado o ERROR + motivo
+     * @throws IOException
+     * @throws ClassNotFoundException
+     */
+    private void handleRegisterPatient() throws IOException, ClassNotFoundException {
+        Object emailData = connection.receiveObject();
+        Object passwordData = connection.receiveObject();
+        Object patientData = connection.receiveObject();
+
+        if (loggedUser != null) {
+            sendError("Log out before creating a new account");
+        } else if (!(emailData instanceof String) || !(passwordData instanceof String) || !(patientData instanceof Patient)) {
+            sendError("Invalid register data");
+        } else {
+            Patient patient = (Patient) patientData;
+            if (patient.getDoctorId() != null && doctorManager.getDoctorById(patient.getDoctorId()) == null) {
+                sendError("The chosen doctor does not exist");
+                return;
+            }
+
+            User user = new User((String) emailData, (String) passwordData, Role.PATIENT);
+            try {
+                userManager.newUser(user);
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                sendError(e.getMessage());
+                return;
+            }
+
+            try {
+                patient.setUserId(user.getId());
+                patientManager.addPatient(patient);
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                userManager.deleteUser(user);
+                sendError(e.getMessage());
+                return;
+            }
+            connection.sendCommand(Commands.OK);
+            connection.sendObject(patient);
+            System.out.println("New patient registered: " + user.getEmail());
+        }
+    }
+
+    /**
+     * GET_DOCTORS no recibe nada. Responde OK + lista de médicos o ERROR + motivo
+     * @throws IOException
+     */
+    private void handleGetDoctors() throws IOException {
+        try {
+            ArrayList<Doctor> doctors = new ArrayList<>(doctorManager.getDoctors());
+            connection.sendCommand(Commands.OK);
+            connection.sendObject(doctors);
+        } catch(IllegalStateException e) {
+            sendError(e.getMessage());
+        }
     }
 
 }
