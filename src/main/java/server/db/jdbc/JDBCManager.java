@@ -32,8 +32,7 @@ public class JDBCManager {
                 id      INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
                 name    TEXT NOT NULL,
-                surname TEXT NOT NULL,
-                phone   TEXT
+                surname TEXT NOT NULL
             )""";
 
     private static final String CREATE_PATIENTS = """

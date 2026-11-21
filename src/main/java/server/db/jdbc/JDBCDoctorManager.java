@@ -14,7 +14,7 @@ import java.util.List;
 public class JDBCDoctorManager implements DoctorManager {
 
     private static final String SELECT_DOCTORS =
-            "SELECT id, user_id, name, surname, phone FROM doctors ";
+            "SELECT id, user_id, name, surname FROM doctors ";
 
     @Override
     public void addDoctor(Doctor doctor) {
@@ -22,13 +22,12 @@ public class JDBCDoctorManager implements DoctorManager {
         if (doctor.getUserId() == null) {
             throw new IllegalArgumentException("The doctor needs a user account");
         }
-        String sql = "INSERT INTO doctors (user_id, name, surname, phone) VALUES (?, ?, ?, ?)";
+        String sql = "INSERT INTO doctors (user_id, name, surname) VALUES (?, ?, ?)";
         try (Connection c = JDBCManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, doctor.getUserId());
             ps.setString(2, doctor.getName());
             ps.setString(3, doctor.getSurname());
-            ps.setString(4, doctor.getPhone());
             ps.executeUpdate();
             doctor.setId(lastInsertedId(c));
         } catch (SQLException e) {
@@ -98,7 +97,6 @@ public class JDBCDoctorManager implements DoctorManager {
         doctor.setUserId(rs.getInt("user_id"));
         doctor.setName(rs.getString("name"));
         doctor.setSurname(rs.getString("surname"));
-        doctor.setPhone(rs.getString("phone"));
         return doctor;
     }
 

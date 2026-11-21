@@ -1,5 +1,13 @@
 package server;
 
+import commonInfo.Doctor;
+import commonInfo.Role;
+import commonInfo.User;
+import server.db.interfaces.DoctorManager;
+import server.db.interfaces.UserManager;
+import server.db.jdbc.JDBCDoctorManager;
+import server.db.jdbc.JDBCUserManager;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -85,6 +93,50 @@ public class AdminConsole implements Runnable {
         return true;
     }
 
+    public void registerDoctor() throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+
+        System.out.println("Doctor email (must end with @doctor.com):");
+        String email = reader.readLine();
+        System.out.println("Doctor password:");
+        String password = reader.readLine();
+        System.out.println("Name:");
+        String name = reader.readLine();
+        System.out.println("Surname:");
+        String surname = reader.readLine();
+
+        if(email == null || password == null || name == null || surname == null) {
+            System.out.println("No input. Doctor not created");
+            return;
+        }
+
+        if(!email.trim().toLowerCase().endsWith("@doctor.com")){
+            System.out.println("Doctor emails must end with @doctor.com. Doctor not created");
+            return;
+        }
+
+        UserManager userManager = new JDBCUserManager();
+        DoctorManager doctorManager = new JDBCDoctorManager();
+
+        User user = new User(email.trim(), password, Role.DOCTOR);
+        try{
+            userManager.newUser(user);
+        } catch (IllegalArgumentException | IllegalStateException e){
+            System.out.println("Could not create the account: " + e.getMessage());
+            return;
+        }
+
+        Doctor doctor = new Doctor(user.getId(), name.trim(), surname.trim());
+        try{
+            doctorManager.addDoctor(doctor);
+        } catch(IllegalArgumentException | IllegalStateException e) {
+            userManager.deleteUser(user);
+            System.out.println("Could not create the doctor: " + e.getMessage());
+            return;
+        }
+        System.out.println("Doctor " + doctor.getName() + " " + doctor.getSurname() + " created");
+    }
+
     @Override
     public void run(){
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in)); //no se cierra, cerraria System.in
@@ -103,6 +155,12 @@ public class AdminConsole implements Runnable {
                         System.out.println("Connected clients: " + server.getConnectedClients());
                     } else if (option.equals("2")) {
                         if(!checkAdminPassword()) {
+                            System.out.println("Wrong password");
+                        } else {
+                            registerDoctor();
+                        }
+                    } else if(option.equals("3")) {
+                        if (!checkAdminPassword()) {
                             System.out.println("Wrong password. Shutdown cancelled");
                         } else {
                             int connected = server.getConnectedClients();
@@ -130,7 +188,8 @@ public class AdminConsole implements Runnable {
         System.out.println();
         System.out.println("ADMIN MENU");
         System.out.println("1. Show connected clients");
-        System.out.println("2. Shut down server");
+        System.out.println("2. Register doctor");
+        System.out.println("3. Shut down server");
         System.out.println("Choose an option:");
     }
 }

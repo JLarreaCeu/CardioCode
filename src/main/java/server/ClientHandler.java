@@ -200,6 +200,10 @@ public class ClientHandler implements Runnable {
             sendError("Invalid register data");
         } else {
             Patient patient = (Patient) patientData;
+            if (((String) emailData).trim().toLowerCase().endsWith("@doctor.com")) {
+                sendError("This email is reserved for doctors");
+                return;
+            }
             if (patient.getDoctorId() != null && doctorManager.getDoctorById(patient.getDoctorId()) == null) {
                 sendError("The chosen doctor does not exist");
                 return;
