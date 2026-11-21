@@ -78,6 +78,10 @@ public class ClientHandler implements Runnable {
                         handleGetPatients();
                     } else if (command == Commands.GET_PATIENT_HISTORY){
                         handleGetPatientHistory();
+                    } else if (command == Commands.ADD_NOTE){
+                        handleAddNote();
+                    } else if (command == Commands.UPDATE_PATIENT){
+                        handleUpdatePatient();
                     } else {
                         System.out.println("Received: " + command);
                         sendError("not avlabl ");
@@ -278,7 +282,7 @@ public class ClientHandler implements Runnable {
      * @throws ClassNotFoundException
      */
     private void handleGetPatientHistory() throws IOException, ClassNotFoundException {
-        Object idData = connection.receiveObject(); //primero se lee el dato, luego se comprueba el login
+        Object idData = connection.receiveObject();
 
         if (loggedUser == null) {
             sendError("You must log in first");
@@ -320,4 +324,101 @@ public class ClientHandler implements Runnable {
         }
     }
 
+    /**
+     * ADD_NOTE recibe el id del informe (Integer) y el comentario del medico (String). Responde OK o ERROR + motivo.
+     * El medico solo puede comentar informes de sus pacientes
+     * @throws IOException
+     * @throws ClassNotFoundException
+     */
+    private void handleAddNote() throws IOException, ClassNotFoundException {
+        Object reportIdData = connection.receiveObject();
+        Object commentData = connection.receiveObject();
+
+        if (!hasRole(Role.DOCTOR)) {
+            return;
+        }
+        if (!(reportIdData instanceof Integer) || !(commentData instanceof String)) {
+            sendError("Invalid note data");
+            return;
+        }
+
+        Doctor doctor = doctorManager.getDoctorByUserId(loggedUser.getId());
+        if (doctor == null) {
+            sendError("There is no doctor profile for this account");
+            return;
+        }
+
+        Integer reportId = (Integer) reportIdData;
+        if (!isReportOfDoctor(reportId, doctor)) {
+            sendError("This report is not from one of your patients");
+            return;
+        }
+
+        try {
+            symptomManager.addDoctorComment(reportId, (String) commentData);
+            connection.sendCommand(Commands.OK);
+            System.out.println("Doctor " + doctor.getId() + " commented report " + reportId);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            sendError(e.getMessage());
+        }
+    }
+
+    /**
+     * Comprueba si un informe es de alguno de los pacientes del medico
+     * @param reportId id del informe
+     * @param doctor medico que lo quiere comentar
+     * @return true si el informe es de uno de sus pacientes
+     */
+    private boolean isReportOfDoctor(Integer reportId, Doctor doctor) {
+        for (Patient patient : patientManager.getPatientsByDoctor(doctor.getId())) {
+            for (SymptomReport report : symptomManager.getReportsByPatient(patient.getId())) {
+                if (report.getId().equals(reportId)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * UPDATE_PATIENT recibe el Patient con los datos corregidos. Responde OK + Patient actualizado o ERROR + motivo.
+     * El medico solo puede editar a sus pacientes, y no puede cambiarles la cuenta ni el medico
+     * @throws IOException
+     * @throws ClassNotFoundException
+     */
+    private void handleUpdatePatient() throws IOException, ClassNotFoundException {
+        Object patientData = connection.receiveObject();
+
+        if (!hasRole(Role.DOCTOR)) {
+            return;
+        }
+        if (!(patientData instanceof Patient)) {
+            sendError("Invalid patient data");
+            return;
+        }
+
+        Patient edited = (Patient) patientData;
+        if (edited.getId() == null) {
+            sendError("Patient id is required");
+            return;
+        }
+
+        Patient saved = patientManager.getPatientById(edited.getId());
+        Doctor doctor = doctorManager.getDoctorByUserId(loggedUser.getId());
+        if (saved == null || doctor == null || !doctor.getId().equals(saved.getDoctorId())) {
+            sendError("This patient is not yours");
+            return;
+        }
+
+        edited.setUserId(saved.getUserId());
+        edited.setDoctorId(saved.getDoctorId());
+        try {
+            patientManager.updatePatient(edited);
+            connection.sendCommand(Commands.OK);
+            connection.sendObject(edited);
+            System.out.println("Patient " + edited.getId() + " updated by doctor " + doctor.getId());
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            sendError(e.getMessage());
+        }
+    }
 }
