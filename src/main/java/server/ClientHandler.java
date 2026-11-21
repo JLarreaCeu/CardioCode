@@ -3,10 +3,12 @@ package server;
 import commonInfo.*;
 import server.db.interfaces.DoctorManager;
 import server.db.interfaces.PatientManager;
+import server.db.interfaces.RecordingManager;
 import server.db.interfaces.SymptomManager;
 import server.db.interfaces.UserManager;
 import server.db.jdbc.JDBCDoctorManager;
 import server.db.jdbc.JDBCPatientManager;
+import server.db.jdbc.JDBCRecordingManager;
 import server.db.jdbc.JDBCSymptomManager;
 import server.db.jdbc.JDBCUserManager;
 
@@ -24,6 +26,7 @@ public class ClientHandler implements Runnable {
     private PatientManager patientManager;
     private SymptomManager symptomManager;
     private DoctorManager doctorManager;
+    private RecordingManager recordingManager;
     private User loggedUser;
 
     public ClientHandler(Socket socket, HospitalServer server) {
@@ -33,6 +36,7 @@ public class ClientHandler implements Runnable {
         this.patientManager = new JDBCPatientManager();
         this.doctorManager = new JDBCDoctorManager();
         this.symptomManager = new JDBCSymptomManager();
+        this.recordingManager = new JDBCRecordingManager();
     }
 
     public void closeConnection(){
@@ -71,9 +75,9 @@ public class ClientHandler implements Runnable {
                     } else if (command == Commands.SEND_SYMPTOMS) {
                         handleSendSymptoms();
                     } else if (command == Commands.GET_PATIENTS){
-                        if(hasRole(Role.DOCTOR)){
-                            sendError("Command not available yet");
-                        }
+                        handleGetPatients();
+                    } else if (command == Commands.GET_PATIENT_HISTORY){
+                        handleGetPatientHistory();
                     } else {
                         System.out.println("Received: " + command);
                         sendError("not avlabl ");
@@ -241,6 +245,77 @@ public class ClientHandler implements Runnable {
             connection.sendCommand(Commands.OK);
             connection.sendObject(doctors);
         } catch(IllegalStateException e) {
+            sendError(e.getMessage());
+        }
+    }
+
+    /**
+     * GET_PATIENTS no recibe nada. Responde OK + lista de pacientes del medico o ERROR + motivo
+     * @throws IOException
+     */
+    private void handleGetPatients() throws IOException {
+        if (!hasRole(Role.DOCTOR)) {
+            return;
+        }
+        Doctor doctor = doctorManager.getDoctorByUserId(loggedUser.getId());
+        if (doctor == null) {
+            sendError("There is no doctor profile for this account");
+            return;
+        }
+        try {
+            ArrayList<Patient> patients = new ArrayList<>(patientManager.getPatientsByDoctor(doctor.getId()));
+            connection.sendCommand(Commands.OK);
+            connection.sendObject(patients);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            sendError(e.getMessage());
+        }
+    }
+
+    /**
+     * GET_PATIENT_HISTORY recibe el id del paciente (Integer). Responde OK + PatientHistory o ERROR + motivo.
+     * El médico solo puede ver a sus pacientes. El paciente siempre recibe su propio historial (el id que mande da igual)
+     * @throws IOException
+     * @throws ClassNotFoundException
+     */
+    private void handleGetPatientHistory() throws IOException, ClassNotFoundException {
+        Object idData = connection.receiveObject(); //primero se lee el dato, luego se comprueba el login
+
+        if (loggedUser == null) {
+            sendError("You must log in first");
+            return;
+        }
+
+        Patient patient;
+        if (loggedUser.getRole() == Role.DOCTOR) {
+            if (!(idData instanceof Integer)) {
+                sendError("Invalid patient id");
+                return;
+            }
+            patient = patientManager.getPatientById((Integer) idData);
+            if (patient == null) {
+                sendError("Patient not found");
+                return;
+            }
+            Doctor doctor = doctorManager.getDoctorByUserId(loggedUser.getId());
+            if (doctor == null || !doctor.getId().equals(patient.getDoctorId())) {
+                sendError("This patient is not yours");
+                return;
+            }
+        } else {
+            patient = patientManager.getPatientByUserId(loggedUser.getId()); //el paciente solo puede ver el suyo
+            if (patient == null) {
+                sendError("There is no patient profile for this account");
+                return;
+            }
+        }
+
+        try {
+            ArrayList<SymptomReport> reports = new ArrayList<>(symptomManager.getReportsByPatient(patient.getId()));
+            ArrayList<Recording> recordings = new ArrayList<>(recordingManager.getRecordingsByPatient(patient.getId()));
+            PatientHistory history = new PatientHistory(patient, reports, recordings);
+            connection.sendCommand(Commands.OK);
+            connection.sendObject(history);
+        } catch (IllegalArgumentException | IllegalStateException e) {
             sendError(e.getMessage());
         }
     }
