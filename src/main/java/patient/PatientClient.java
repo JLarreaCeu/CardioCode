@@ -2,10 +2,9 @@ package patient;
 
 import commonInfo.*;
 
-import java.io.IOError;
+
 import java.io.IOException;
 import java.net.Socket;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -16,7 +15,7 @@ public class PatientClient implements Pings {
     private static final int PORT = 6767;
     private final SocketConnection con;
     private final Socket socket;
-    //User looged in through this connection.
+    //User logged in through this connection.
     private User loggedUser;
 
 
@@ -112,6 +111,14 @@ public class PatientClient implements Pings {
         expectConfirmation();
     }
 
+    public synchronized PatientHistory getMyhistory()throws IOException,ServerException{
+        con.sendCommand(Commands.GET_PATIENT_HISTORY);
+        con.sendObject(null);
+        expectConfirmation();
+        return (PatientHistory) receive();
+    }
+
+
     public synchronized void startRecording()throws IOException,ServerException{
         con.sendCommand(Commands.START_RECORDING);
         expectConfirmation();
@@ -128,6 +135,40 @@ public class PatientClient implements Pings {
         expectConfirmation();
     }
 
+
+    public RecordingSession startECGRecording(BitalinoRecorder recorder,int seconds, RecordingSession.Listener gui)throws IOException, ServerException{
+        startRecording();
+        RecordingSession session=new RecordingSession(recorder, seconds, new RecordingSession.Listener() {
+            @Override
+            public void onBlock(int[] samples) throws IOException {
+                try{
+                    sendSignalBlock(samples);
+                }catch(ServerException e){
+                    throw new IOException(e.getMessage());
+                }
+                if (gui!=null){
+                    gui.onBlock(samples);
+                }
+            }
+
+            @Override
+            public void onFinished(int totalSamples, Exception error) {
+                try{
+                    stopRecording();
+                }catch(IOException|ServerException e){
+                    if(error==null){
+                        error=e;
+                    }
+                }
+                if(gui!=null){
+                    gui.onFinished(totalSamples,error);
+                }
+            }
+        });
+        new Thread (session).start();
+        return session;
+    }
+
     private void expectConfirmation()throws IOException,ServerException {
         Object answer=receive();
         if(answer==Commands.OK){
@@ -140,7 +181,7 @@ public class PatientClient implements Pings {
 
     }
 
-    private Object receive() throws IOError, IOException {
+    private Object receive() throws IOException {
         try{
             return con.receiveObject();
 
