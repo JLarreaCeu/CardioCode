@@ -1,8 +1,7 @@
 package gui;
 
-import server.db.interfaces.UserManager;
-import server.db.jdbc.JDBCManager;
-import server.db.jdbc.JDBCUserManager;
+import commonInfo.Doctor;
+import commonInfo.Patient;
 import commonInfo.Role;
 import commonInfo.User;
 import doctor.DoctorClient;
@@ -37,6 +36,8 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -44,19 +45,12 @@ import java.util.Random;
  *abre el menú de cada rol
  */
 public class GUI {
-    
-    static UserManager userManager;
-
     public static void main(String[] args) {
-        new JDBCManager();       // crea la base de datos y las tablas si no existen
-        userManager = new JDBCUserManager();
         Application.launch(App.class, args);
     }
 
 
     public static class App extends Application {
-
-        // Dónde está el HospitalServer
         private static final String SERVER_ADDRESS = "localhost";
 
         private Stage stage;
@@ -78,6 +72,17 @@ public class GUI {
         private Label newPasswordError;
         private Label confirmError;
         private Label signUpMessage;
+
+        private TextField newNameField;
+        private TextField newSurnameField;
+        private TextField newPhoneField;
+        private DatePicker birthDatePicker;
+        private ComboBox<String> sexBox;
+        private ComboBox<Doctor> doctorBox;
+        private Label newNameError;
+        private Label newSurnameError;
+        private Label birthDateError;
+        private Label doctorError;
 
         @Override
         public void start(Stage stage) {
@@ -165,43 +170,56 @@ public class GUI {
                 return;
             }
 
-            //enviar Commands.LOGIN y esperar OK.
-            User user = userManager.checkPassword(email, password);
-            if (user == null) {
-                showError(passwordField, passwordError, "Wrong email or password.");
+            // LOGIN contra el servidor: es el único que tiene la base de datos.
+            // El rol no se sabe hasta que contesta, así que se entra con una conexión de paciente
+            // y, si resulta ser un médico, se cambia a una conexión de médico.
+            PatientClient patientClient = null;
+            User user;
+            try {
+                patientClient = new PatientClient(SERVER_ADDRESS);
+                user = patientClient.login(email, password);
+            } catch (IOException e) {
+                close(patientClient);
+                showMessage(loginMessage, "Can't reach the hospital server.");
+                return;
+            } catch (PatientClient.ServerException e) {
+                close(patientClient);
+                if ("Wrong email or password".equals(e.getMessage())) {
+                    showError(passwordField, passwordError, "Wrong email or password.");
+                } else {
+                    showMessage(loginMessage, "The server rejected the login: " + e.getMessage());
+                }
                 return;
             }
 
             Role role = user.getRole();
-            if (role == null) {
+            if (role == Role.PATIENT) {
+                patientMn = new PatientGUI(user, this, patientClient);
+            } else if (role == Role.DOCTOR) {
+                close(patientClient);   // esta conexión ya no hace falta
+                openDoctor(email, password);
+            } else {
+                close(patientClient);
                 showMessage(loginMessage, "Unknown role. Access denied.");
-                return;
             }
-            switch (role) {
-                case PATIENT:
-                    try {
-                        PatientClient patientClient = new PatientClient(SERVER_ADDRESS);
-                        // Login también en el servidor, para que sepa qué paciente envía los datos
-                        user = patientClient.login(email, password);
-                        patientMn = new PatientGUI(user, this, patientClient);
-                    } catch (IOException e) {
-                        showMessage(loginMessage, "Can't reach the hospital server.");
-                    } catch (PatientClient.ServerException e) {
-                        showMessage(loginMessage, "The server rejected the login: " + e.getMessage());
-                    }
-                    break;
+        }
 
-                case DOCTOR:
-                    try {
-                        DoctorClient doctorClient = new DoctorClient(SERVER_ADDRESS);
-                        doctorMn = new DoctorGUI(user, this, doctorClient);
-                    } catch (IOException e) {
-                        showMessage(loginMessage, "Can't reach the hospital server.");
-                    }
-                    break;
-
-                default:
-                    showMessage(loginMessage, "Unknown role. Access denied.");
+        /** Abre la conexión de médico, hace LOGIN y abre su menú. */
+        private void openDoctor(String email, String password) {
+            DoctorClient doctorClient = null;
+            try {
+                doctorClient = new DoctorClient(SERVER_ADDRESS);
+                User user = doctorClient.login(email, password);
+                doctorMn = new DoctorGUI(user, this, doctorClient);
+            } catch (IOException e) {
+                showMessage(loginMessage, "Can't reach the hospital server.");
+            } catch (DoctorClient.ServerException e) {
+                try {
+                    doctorClient.logout();
+                } catch (IOException ex) {
+                    System.out.println("Could not close the connection: " + ex.getMessage());
+                }
+                showMessage(loginMessage, "The server rejected the login: " + e.getMessage());
             }
         }
 
@@ -211,6 +229,37 @@ public class GUI {
             GUI.title(title, 30);
             Label subtitle = new Label("Sign up as a new patient");
             GUI.subtitle(subtitle);
+
+            newNameField = new TextField();
+            newNameField.setPromptText("Name");
+            GUI.input(newNameField);
+            newNameError = makeErrorLabel();
+
+            newSurnameField = new TextField();
+            newSurnameField.setPromptText("Surname");
+            GUI.input(newSurnameField);
+            newSurnameError = makeErrorLabel();
+
+            birthDatePicker = new DatePicker();
+            birthDatePicker.setPromptText("dd/mm/yyyy");
+            GUI.selectInput(birthDatePicker);
+            birthDateError = makeErrorLabel();
+            birthDatePicker.valueProperty().addListener((obs, was, now) -> show(birthDateError, false));
+
+            sexBox = new ComboBox<>();
+            sexBox.getItems().addAll("Female", "Male");
+            sexBox.setPromptText("Choose");
+            GUI.selectInput(sexBox);
+
+            newPhoneField = new TextField();
+            newPhoneField.setPromptText("Optional");
+            GUI.input(newPhoneField);
+
+            doctorBox = new ComboBox<>();
+            doctorBox.setPromptText("Choose your cardiologist");
+            GUI.selectInput(doctorBox);
+            doctorError = makeErrorLabel();
+            doctorBox.valueProperty().addListener((obs, was, now) -> show(doctorError, false));
 
             newEmailField = new TextField();
             newEmailField.setPromptText("name@example.com");
@@ -242,24 +291,107 @@ public class GUI {
             HBox loginRow = new HBox(6, haveAccount, loginLink);
             loginRow.setAlignment(Pos.CENTER);
 
-            VBox form = new VBox(20,
+            VBox form = new VBox(14,
                     new VBox(6, title, subtitle),
+                    twoColumns(fieldBox("Name", newNameField, newNameError),
+                            fieldBox("Surname", newSurnameField, newSurnameError)),
+                    twoColumns(controlBox("Date of birth", birthDatePicker, birthDateError),
+                            controlBox("Sex", sexBox, null)),
+                    twoColumns(fieldBox("Phone", newPhoneField, makeErrorLabel()),
+                            controlBox("Doctor", doctorBox, doctorError)),
                     fieldBox("Email", newEmailField, newEmailError),
                     fieldBox("Password", newPasswordField, newPasswordError),
                     fieldBox("Confirm password", confirmField, confirmError),
                     createButton,
                     signUpMessage,
                     loginRow);
+            form.setMaxWidth(460);
             showNextToBrand(form);
+            loadDoctors();
         }
 
-        /**guarda el nuevo paciente en la base de datos. */
+        /** Pide al servidor GET_DOCTORS. */
+        private void loadDoctors() {
+            PatientClient client = null;
+            try {
+                client = new PatientClient(SERVER_ADDRESS);
+                List<Doctor> doctors = client.getDoctors();
+                doctorBox.getItems().setAll(doctors);
+                if (doctors.isEmpty()) {
+                    doctorBox.setPromptText("No doctors available yet");
+                }
+            } catch (IOException e) {
+                showMessage(signUpMessage, "Can't reach the hospital server. You need it to create an account.");
+            } catch (PatientClient.ServerException e) {
+                showMessage(signUpMessage, "Could not load the list of doctors: " + e.getMessage());
+            } finally {
+                close(client);
+            }
+        }
+
+        /** Cierra una conexión*/
+        private void close(PatientClient client) {
+            if (client == null) {
+                return;
+            }
+            try {
+                client.logout();
+            } catch (IOException e) {
+                System.out.println("Could not close the connection: " + e.getMessage());
+            }
+        }
+
+        /** Dos campos en la misma fila */
+        private HBox twoColumns(VBox left, VBox right) {
+            HBox.setHgrow(left, Priority.ALWAYS);
+            HBox.setHgrow(right, Priority.ALWAYS);
+            left.setPrefWidth(0);
+            right.setPrefWidth(0);
+            return new HBox(12, left, right);
+        }
+
+        /** Etiqueta + fecha + error  */
+        private VBox controlBox(String labelText, Control control, Label error) {
+            Label label = new Label(labelText);
+            GUI.fieldLabel(label);
+            label.setLabelFor(control);
+            VBox box = new VBox(6, label, control);
+            if (error != null) {
+                box.getChildren().add(error);
+            }
+            return box;
+        }
+
+        /** Crea la cuenta y REGISTER_PATIENT */
         private void handleSignUp() {
             String email = newEmailField.getText().trim();
             String password = newPasswordField.getText();
+            String name = newNameField.getText().trim();
+            String surname = newSurnameField.getText().trim();
+            String phone = newPhoneField.getText().trim();
+            LocalDate birthDate = birthDatePicker.getValue();
+            Doctor doctor = doctorBox.getValue();
             String confirm = confirmField.getText();
             boolean ok = true;
 
+            if (name.isEmpty()) {
+                showError(newNameField, newNameError, "Enter your name.");
+                ok = false;
+            }
+            if (surname.isEmpty()) {
+                showError(newSurnameField, newSurnameError, "Enter your surname.");
+                ok = false;
+            }
+            if (birthDate != null && birthDate.isAfter(LocalDate.now())) {
+                birthDateError.setText("The date can't be in the future.");
+                show(birthDateError, true);
+                ok = false;
+            }
+            if (doctor == null && !doctorBox.getItems().isEmpty()) {
+                doctorError.setText("Choose your doctor.");
+                show(doctorError, true);
+                ok = false;
+            }
             if (!checkEmail(email, newEmailField, newEmailError)) {
                 ok = false;
             }
@@ -275,41 +407,54 @@ public class GUI {
                 return;
             }
 
-            if (userManager.getUserByEmail(email) != null) {
-                showError(newEmailField, newEmailError, "There is already an account with this email.");
-                return;
-            }
+            Patient patient = new Patient(null, name, surname, birthDate,
+                    sexBox.getValue(), phone.isEmpty() ? null : phone,
+                    doctor == null ? null : doctor.getId());
 
+            PatientClient client = null;
             try {
-                // newUser calcula el hash de la contraseña (PasswordHasher)
-                User user = new User(email, password, Role.PATIENT);
-                userManager.newUser(user);
-                if (user.getId() == null) {   //si tiene ID quiere decir que funciona
-                    showMessage(signUpMessage, "The account could not be created. Try again.");
-                    return;
-                }
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                showMessage(signUpMessage, "The account could not be created. Try again.");
+                client = new PatientClient(SERVER_ADDRESS);
+                client.register(email, password, patient);
+            } catch (IOException e) {
+                showMessage(signUpMessage, "Can't reach the hospital server. Try again.");
                 return;
+            } catch (PatientClient.ServerException e) {
+                String reason = e.getMessage();
+                if (reason != null && reason.startsWith("Email already registered")) {
+                    showError(newEmailField, newEmailError, "There is already an account with this email.");
+                } else {
+                    showMessage(signUpMessage, "The account could not be created: " + reason);
+                }
+                return;
+            } finally {
+                close(client);
             }
 
-            newPasswordField.clear();
-            confirmField.clear();
-            showMessage(signUpMessage, "Account created! You can now sign in.");
+            showLogin();
+            emailField.setText(email);
+            showMessage(loginMessage, "Account created! You can now sign in.");
         }
 
 
-        /**  formulario a la derecha y el panel azul */
+        /**  formulario y el panel  */
         private void showNextToBrand(VBox form) {
-            form.setMaxWidth(360);
+            if (form.getMaxWidth() <= 0 || form.getMaxWidth() == Double.MAX_VALUE) {
+                form.setMaxWidth(360);
+            }
             StackPane formPanel = new StackPane(form);
             GUI.formPanel(formPanel);
-            HBox.setHgrow(formPanel, Priority.ALWAYS);
+
+            ScrollPane formScroll = new ScrollPane(formPanel);
+            formScroll.setFitToWidth(true);
+            formScroll.setFitToHeight(true);
+            formScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+            formScroll.setBorder(null);
+            GUI.background(formScroll, Color.WHITE, 0);
+            HBox.setHgrow(formScroll, Priority.ALWAYS);
 
             VBox brandPanel = makeBrandPanel();
 
-            HBox root = new HBox(brandPanel, formPanel);
+            HBox root = new HBox(brandPanel, formScroll);
             brandPanel.prefWidthProperty().bind(root.widthProperty().multiply(0.5));
             setScreen(root);
         }
@@ -509,6 +654,17 @@ public class GUI {
         field.setPrefHeight(46);
         field.setMaxWidth(Double.MAX_VALUE);
         field.setPadding(new Insets(0, 12, 0, 12));
+    }
+
+    /** Desplegable o selector de fecha con el mismo aspecto que los campos de texto. */
+    public static void selectInput(ComboBoxBase<?> control) {
+        background(control, LAVANDA, 10);
+        control.setPrefHeight(46);
+        control.setMaxWidth(Double.MAX_VALUE);
+        control.setStyle("-fx-font-size: 14px;");
+        if (control instanceof DatePicker) {
+            background(((DatePicker) control).getEditor(), Color.TRANSPARENT, 10);
+        }
     }
 
     /** Borde rojo si el campo tiene un error*/

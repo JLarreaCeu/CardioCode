@@ -1,5 +1,7 @@
 package gui;
 
+import commonInfo.Patient;
+import commonInfo.PatientHistory;
 import commonInfo.User;
 import commonInfo.SymptomReport;
 import javafx.geometry.Insets;
@@ -11,6 +13,7 @@ import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.FlowPane;
@@ -27,6 +30,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -35,9 +39,10 @@ import java.util.Locale;
  */
 public class PatientGUI {
 
-    private static final DateTimeFormatter REPORT_DATE = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm", Locale.ENGLISH);
-    private static final Color DOCTOR_GREEN = Color.web("#1E8E3E");
-    private static final Color DOCTOR_GREEN_BG = Color.web("#E6F4EA");
+    // Sin "private": DoctorGUI también los usa para pintar los informes igual
+    static final DateTimeFormatter REPORT_DATE = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm", Locale.ENGLISH);
+    static final Color DOCTOR_GREEN = Color.web("#1E8E3E");
+    static final Color DOCTOR_GREEN_BG = Color.web("#E6F4EA");
     private static final Color SYMPTOM_BG = Color.web("#FCE8EB");
     private PingThread pingThread;
 
@@ -47,18 +52,44 @@ public class PatientGUI {
 
     private Label message;
 
-    // Informes enviados en esta sesión (el servidor todavía no los guarda)
+
+    private Patient patient;
     private final List<SymptomReport> reports = new ArrayList<>();
 
     public PatientGUI(User user, GUI.App mainFrame, PatientClient patientClient) {
         this.user = user;
         this.mainFrame = mainFrame;
         this.patientClient = patientClient;
+        String loadError = loadHistory();
         showPatientMenu();
+        if (loadError != null) {
+            showMessage(loadError);
+        }
         pingThread = new PingThread(patientClient, mainFrame);
         Thread thread = new Thread(pingThread);
         thread.setDaemon(true); //para que no impida cerrar la app
         thread.start();
+    }
+
+    /**
+     * GET_PATIENT_HISTORY
+     */
+    private String loadHistory() {
+        try {
+            PatientHistory history = patientClient.getMyhistory();
+            patient = history.getPatient();
+            reports.clear();
+            if (history.getReports() != null) {
+                reports.addAll(history.getReports());
+            }
+            reports.sort(Comparator.comparing(SymptomReport::getDateTime,
+                    Comparator.nullsLast(Comparator.reverseOrder())));
+            return null;
+        } catch (PatientClient.ServerException e) {
+            return "Could not load your reports: " + e.getMessage();
+        } catch (IOException e) {
+            return "Can't reach the hospital server ";
+        }
     }
 
     public void showPatientMenu() {
@@ -103,7 +134,7 @@ public class PatientGUI {
 
         Label symptomsTitle = new Label("How do you feel today?");
         GUI.title(symptomsTitle, 20);
-        Label symptomsText = new Label("Palpitations, dizziness, tiredness, chest pain…");
+        Label symptomsText = new Label("Palpitations, dizziness, tiredness, chest pain");
         GUI.muted(symptomsText);
         symptomsText.setWrapText(true);
         Region space = new Region();
@@ -126,7 +157,7 @@ public class PatientGUI {
         GUI.title(reportsTitle, 20);
         Label reportsText = new Label(reports.isEmpty()
                 ? "Your symptom reports and your doctor's comments will appear here."
-                : reports.size() + (reports.size() == 1 ? " report" : " reports") + " so far.");
+                : reports.size() + (reports.size() == 1 ? " report" : " reports"));
         GUI.muted(reportsText);
         reportsText.setWrapText(true);
         VBox reportsInfo = new VBox(4, reportsTitle, reportsText);
@@ -153,10 +184,6 @@ public class PatientGUI {
         backLink.setOnAction(e -> showPatientMenu());
         Label formTitle = new Label("How do you feel today?");
         GUI.title(formTitle, 28);
-        Label formSubtitle = new Label("Your answers help your doctor follow your heart health. It only takes a minute.");
-        GUI.subtitle(formSubtitle);
-        formSubtitle.setWrapText(true);
-        VBox titleBox = new VBox(4, formTitle, formSubtitle);
         ToggleGroup physicalGroup = new ToggleGroup();
         FlowPane physicalPills = pills(physicalGroup, "Excellent", "Good", "Fair", "Poor", "Terrible");
         VBox physicalSection = section("How do you feel physically today?", null, physicalPills);
@@ -173,13 +200,20 @@ public class PatientGUI {
         VBox symptomsSection = section("Have you experienced any of these symptoms?", "Select all that apply.", symptomPills);
 
         TextArea notesArea = new TextArea();
-        notesArea.setPromptText("Any extra context, triggers or observations…");
+        notesArea.setPromptText("Any observations");
         notesArea.setPrefRowCount(3);
         notesArea.setWrapText(true);
         notesArea.setFont(Font.font("System", 14));
         notesArea.setStyle("-fx-control-inner-background: #E4E4FB; -fx-background-color: #E4E4FB;"
                 + " -fx-background-radius: 10; -fx-background-insets: 0; -fx-focus-color: #4A44B5; -fx-faint-focus-color: transparent;");
         VBox notesSection = section("Additional notes", "Optional.", notesArea);
+
+
+        TextField minutesField = new TextField();
+        minutesField.setPromptText("e.g. 15");
+        GUI.input(minutesField);
+        minutesField.setMaxWidth(160);
+        VBox minutesSection = section("How long did the episode last?", "Optional. In minutes.", minutesField);
 
         Label formError = new Label();
         GUI.fieldError(formError);
@@ -199,6 +233,7 @@ public class PatientGUI {
             palpitations.setSelected(false);
             fatigue.setSelected(false);
             notesArea.clear();
+            minutesField.clear();
             formError.setVisible(false);
             formError.setManaged(false);
         });
@@ -215,10 +250,27 @@ public class PatientGUI {
                 formError.setManaged(true);
                 return;
             }
+
+            // Duración: vacía = 0; si no, tiene que ser un número entero >= 0
+            int episodeMinutes = 0;
+            String minutesText = minutesField.getText().trim();
+            if (!minutesText.isEmpty()) {
+                try {
+                    episodeMinutes = Integer.parseInt(minutesText);
+                } catch (NumberFormatException ex) {
+                    episodeMinutes = -1;
+                }
+                if (episodeMinutes < 0) {
+                    formError.setText(" duration must be a whole number ");
+                    formError.setVisible(true);
+                    formError.setManaged(true);
+                    return;
+                }
+            }
+
             String physical = ((ToggleButton) physicalGroup.getSelectedToggle()).getText();
             String mood = ((ToggleButton) moodGroup.getSelectedToggle()).getText();
 
-            // El estado físico y el ánimo no tienen campo propio en SymptomReport: van en los comentarios
             StringBuilder comments = new StringBuilder();
             comments.append("Physical: ").append(physical).append(" | Mood: ").append(mood);
             String notes = notesArea.getText().trim();
@@ -234,7 +286,7 @@ public class PatientGUI {
                     shortnessOfBreath.isSelected(),
                     chestPain.isSelected(),
                     fatigue.isSelected(),
-                    0,
+                    episodeMinutes,
                     comments.toString()
             );
 
@@ -242,19 +294,21 @@ public class PatientGUI {
             try {
                 patientClient.sendSymptoms(report);
             } catch (PatientClient.ServerException ex) {
-                // El servidor ha contestado ERROR: se queda en el formulario y lo dice
                 formError.setText("The server could not save your symptoms: " + ex.getMessage());
                 formError.setVisible(true);
                 formError.setManaged(true);
                 return;
             } catch (IOException ex) {
-                formError.setText("Can't reach the hospital server. Try again.");
+                formError.setText("Can't reach the hospital server.");
                 formError.setVisible(true);
                 formError.setManaged(true);
                 return;
             }
 
-            reports.add(report);
+
+            if (loadHistory() != null) {
+                reports.add(0, report);
+            }
             showPatientMenu();
             showMessage(String.format("Symptoms sent at %s.",
                     report.getDateTime().toLocalTime().withNano(0)));
@@ -265,15 +319,14 @@ public class PatientGUI {
         HBox buttonBar = new HBox(12, clearButton, buttonSpacer, submitButton);
         buttonBar.setAlignment(Pos.CENTER_LEFT);
 
-        VBox card = new VBox(24, physicalSection, moodSection, symptomsSection, notesSection, formError, buttonBar);
+        VBox card = new VBox(24, physicalSection, moodSection, symptomsSection, minutesSection, notesSection, formError, buttonBar);
         GUI.card(card);
         card.setPadding(new Insets(28, 32, 28, 32));
 
-        VBox content = new VBox(20, backLink, titleBox, card);
+        VBox content = new VBox(20, backLink, card);
         content.setMaxWidth(720);
         content.setPadding(new Insets(28, 40, 32, 40));
 
-        // El contenido va centrado; si la ventana es baja, se puede hacer scroll
         StackPane centered = new StackPane(content);
         StackPane.setAlignment(content, Pos.TOP_CENTER);
         GUI.background(centered, GUI.FONDO, 0);
@@ -283,12 +336,13 @@ public class PatientGUI {
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scroll.setBorder(null);
         GUI.background(scroll, GUI.FONDO, 0);
-        // el fondo llega hasta abajo aunque haya poco contenido
+
+
         scroll.viewportBoundsProperty().addListener((obs, was, now) -> centered.setMinHeight(now.getHeight()));
         mainFrame.setScreen(scroll);
     }
 
-    /** Historial de informes del paciente, del más reciente al más antiguo. */
+    /** Historial de informes del paciente */
     private void showReports() {
 
         Hyperlink backLink = new Hyperlink("← Back to menu");
@@ -297,12 +351,17 @@ public class PatientGUI {
 
         Label pageTitle = new Label("My Health Reports");
         GUI.title(pageTitle, 28);
-        Label pageSubtitle = new Label("Everything you have reported, and what your doctor said about it.");
-        GUI.subtitle(pageSubtitle);
-        pageSubtitle.setWrapText(true);
-        VBox titleBox = new VBox(4, pageTitle, pageSubtitle);
+        VBox titleBox = new VBox(4, pageTitle);
+
+        String loadError = loadHistory();
 
         VBox list = new VBox(16);
+        if (loadError != null) {
+            Label errorLabel = new Label(loadError);
+            GUI.fieldError(errorLabel);
+            errorLabel.setWrapText(true);
+            list.getChildren().add(errorLabel);
+        }
         if (reports.isEmpty()) {
             Label emptyTitle = new Label("You have no health reports yet.");
             GUI.text(emptyTitle, 16, true, GUI.AZUL_NOCHE);
@@ -320,8 +379,8 @@ public class PatientGUI {
             empty.setPadding(new Insets(40));
             list.getChildren().add(empty);
         } else {
-            for (int i = reports.size() - 1; i >= 0; i--) {
-                list.getChildren().add(reportCard(reports.get(i)));
+            for (SymptomReport report : reports) {   // ya vienen del más reciente al más antiguo
+                list.getChildren().add(reportCard(report));
             }
         }
 
@@ -343,9 +402,9 @@ public class PatientGUI {
         mainFrame.setScreen(scroll);
     }
 
-    /** Tarjeta de un informe: fecha, quién lo ha revisado, estado, síntomas, notas y comentarios del médico. */
+    /**  fecha, quién lo ha revisado */
     private VBox reportCard(SymptomReport report) {
-        String doctorText = report.getDoctorComments();
+        String doctorText = report.getDoctorComment();
         boolean reviewed = doctorText != null && !doctorText.isBlank();
 
         // Fecha + etiqueta
@@ -360,12 +419,15 @@ public class PatientGUI {
         HBox top = new HBox(12, date, spacer, badge);
         top.setAlignment(Pos.CENTER_LEFT);
 
-        // Estado físico y ánimo
+
         HBox state = new HBox(32,
                 infoPair("Physical", commentPart(report.getComments(), "Physical")),
                 infoPair("Mood", commentPart(report.getComments(), "Mood")));
+        if (report.getEpisodeMinutes() > 0) {
+            state.getChildren().add(infoPair("Duration", report.getEpisodeMinutes() + " min"));
+        }
 
-        // Síntomas
+
         Label symptomsLabel = new Label("Symptoms");
         GUI.muted(symptomsLabel);
         FlowPane symptomChips = new FlowPane(8, 8);
@@ -383,7 +445,6 @@ public class PatientGUI {
 
         VBox card = new VBox(16, top, state, symptoms);
 
-        // Notas del paciente
         String notes = commentPart(report.getComments(), "Notes");
         if (notes != null) {
             Label notesLabel = new Label("Your notes");
@@ -394,9 +455,11 @@ public class PatientGUI {
             card.getChildren().add(new VBox(4, notesLabel, notesText));
         }
 
-        // Comentarios del médico
+
         if (reviewed) {
-            Label doctorLabel = new Label("Doctor's comments");
+            String when = report.getDoctorCommentTime() == null ? ""
+                    : " · " + report.getDoctorCommentTime().format(REPORT_DATE);
+            Label doctorLabel = new Label("Doctor's comments" + when);
             GUI.text(doctorLabel, 12, true, DOCTOR_GREEN);
             Label doctorComment = new Label(doctorText);
             GUI.text(doctorComment, 14, false, GUI.AZUL_NOCHE);
@@ -412,8 +475,8 @@ public class PatientGUI {
         return card;
     }
 
-    /** Dato pequeño con su nombre encima, p. ej. "Mood / Anxious". */
-    private static VBox infoPair(String name, String value) {
+
+    static VBox infoPair(String name, String value) {
         Label nameLabel = new Label(name);
         GUI.muted(nameLabel);
         Label valueLabel = new Label(value == null ? "—" : value);
@@ -421,7 +484,7 @@ public class PatientGUI {
         return new VBox(2, nameLabel, valueLabel);
     }
 
-    private static void addChip(FlowPane chips, boolean present, String text) {
+    static void addChip(FlowPane chips, boolean present, String text) {
         if (present) {
             Label chip = new Label(text);
             GUI.text(chip, 12, true, GUI.CORAL_TEXTO);
@@ -431,8 +494,8 @@ public class PatientGUI {
         }
     }
 
-    /** Saca una parte de los comentarios ("Physical: Good | Mood: Anxious | Notes: ..."). */
-    private static String commentPart(String comments, String key) {
+    /** Saca una parte de los comentarios */
+    static String commentPart(String comments, String key) {
         if (comments == null) {
             return null;
         }
@@ -444,7 +507,7 @@ public class PatientGUI {
         return null;
     }
 
-    /** Pregunta del formulario: título, ayuda opcional y el control. */
+    /** Pregunta del formulario: */
     private static VBox section(String question, String hint, Node control) {
         Label questionLabel = new Label(question);
         GUI.text(questionLabel, 15, true, GUI.AZUL_NOCHE);
@@ -493,14 +556,20 @@ public class PatientGUI {
         return pill;
     }
 
-    /** lougout */
+    /** Cierra la sesión en el servidor y vuelve al login. */
     private void logout() {
+        pingThread.stop();
+        boolean serverNotified = true;
         try {
-            pingThread.stop();
             patientClient.logout();
         } catch (IOException e) {
+            System.out.println("Could not notify the server about the logout: " + e.getMessage());
+            serverNotified = false;
         }
         mainFrame.showLogin();
+        if (!serverNotified) {
+            mainFrame.showMessage("You have been logged out, but the hospital server could not be reached.");
+        }
     }
 
     private void showMessage(String text) {
@@ -509,7 +578,14 @@ public class PatientGUI {
         message.setManaged(true);
     }
 
+    /** Nombre del paciente*/
     private String displayName() {
+        if (patient != null && patient.getName() != null && !patient.getName().isBlank()) {
+            if (patient.getSurname() != null && !patient.getSurname().isBlank()) {
+                return patient.getName() + " " + patient.getSurname();
+            }
+            return patient.getName();
+        }
         String first = user.getEmail().split("@")[0].split("[._-]")[0];
         if (first.isEmpty()) {
             return user.getEmail();
