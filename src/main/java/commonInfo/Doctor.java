@@ -14,16 +14,14 @@ public class Doctor implements Serializable {
     private Integer userId;      // id de su User (email, contraseña y rol)
     private String name;
     private String surname;
-    private String phone;
 
     public Doctor() {
     }
 
-    public Doctor(Integer userId, String name, String surname, String phone) {
+    public Doctor(Integer userId, String name, String surname) {
         this.userId = userId;
         this.name = name;
         this.surname = surname;
-        this.phone = phone;
     }
 
     public Integer getId() {
@@ -58,13 +56,6 @@ public class Doctor implements Serializable {
         this.surname = surname;
     }
 
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
 
     @Override
     public boolean equals(Object obj) {
