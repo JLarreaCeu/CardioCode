@@ -16,6 +16,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.time.LocalDateTime;
 
 public class ClientHandler implements Runnable {
 
@@ -28,6 +29,11 @@ public class ClientHandler implements Runnable {
     private DoctorManager doctorManager;
     private RecordingManager recordingManager;
     private User loggedUser;
+    private RecordingFileWriter recordingFile;
+    private Integer recordingId;
+    private static final int SAMPLING_RATE = 1000;
+    private static final String CHANNEL = "ECG";
+    private static final String UNITS = "ADC";
 
     public ClientHandler(Socket socket, HospitalServer server) {
         this.socket = socket;
@@ -37,6 +43,7 @@ public class ClientHandler implements Runnable {
         this.doctorManager = new JDBCDoctorManager();
         this.symptomManager = new JDBCSymptomManager();
         this.recordingManager = new JDBCRecordingManager();
+        this.recordingFile = new RecordingFileWriter();
     }
 
     public void closeConnection(){
@@ -82,6 +89,14 @@ public class ClientHandler implements Runnable {
                         handleAddNote();
                     } else if (command == Commands.UPDATE_PATIENT){
                         handleUpdatePatient();
+                    } else if (command == Commands.START_RECORDING){
+                        handleStartRecording();
+                    } else if (command == Commands.SIGNAL_DATA){
+                        handleSignalData();
+                    } else if (command == Commands.STOP_RECORDING){
+                        handleStopRecording();
+                    } else if (command == Commands.GET_RECORDING_DATA){
+                        handleGetRecordingData();
                     } else {
                         System.out.println("Received: " + command);
                         sendError("not avlabl ");
@@ -95,6 +110,7 @@ public class ClientHandler implements Runnable {
         } catch (IOException | ClassNotFoundException e) {
             System.out.println("Error with client: " + e.getMessage());
         } finally {
+            finishRecording();
             server.removeClient(this);
             if (connection != null) {
                 connection.close();
@@ -419,6 +435,121 @@ public class ClientHandler implements Runnable {
             System.out.println("Patient " + edited.getId() + " updated by doctor " + doctor.getId());
         } catch (IllegalArgumentException | IllegalStateException e) {
             sendError(e.getMessage());
+        }
+    }
+
+    private void handleStartRecording() throws IOException {
+        if (!hasRole(Role.PATIENT)) {
+            return;
+        }
+        if (recordingFile.isOpen()) {
+            sendError("There is already a recording in progress");
+            return;
+        }
+        Patient patient = patientManager.getPatientByUserId(loggedUser.getId());
+        if (patient == null) {
+            sendError("There is no patient profile for this account");
+            return;
+        }
+
+        Recording recording = new Recording(patient.getId(), LocalDateTime.now(), SAMPLING_RATE, CHANNEL, UNITS);
+        try {
+            recording.setFilePath(recordingFile.open(patient.getId()));
+            recordingManager.addRecording(recording);
+        } catch (IOException | IllegalArgumentException | IllegalStateException e) {
+            recordingFile.close();
+            System.out.println("Could not start recording: " + e.getMessage());
+            sendError("Could not start the recording");
+            return;
+        }
+        recordingId = recording.getId();
+        connection.sendCommand(Commands.OK);
+        System.out.println("Recording " + recordingId + " started for patient " + patient.getId());
+    }
+
+    private void handleSignalData() throws IOException, ClassNotFoundException {
+        Object data = connection.receiveObject();
+
+        if (!hasRole(Role.PATIENT)) {
+            return;
+        }
+        if (!recordingFile.isOpen()) {
+            sendError("There is no recording in progress");
+            return;
+        }
+        if (!(data instanceof int[])) {
+            sendError("Invalid signal data");
+            return;
+        }
+        try {
+            recordingFile.writeBlock((int[]) data);
+            connection.sendCommand(Commands.OK);
+        } catch (IOException e) {
+            System.out.println("Could not write signal data: " + e.getMessage());
+            sendError("Could not save the signal data");
+        }
+    }
+
+    private void handleStopRecording() throws IOException {
+        if (!hasRole(Role.PATIENT)) {
+            return;
+        }
+        if (!recordingFile.isOpen()) {
+            sendError("There is no recording in progress");
+            return;
+        }
+        finishRecording();
+        connection.sendCommand(Commands.OK);
+    }
+
+    private void finishRecording() {
+        if (!recordingFile.isOpen()) {
+            return;
+        }
+        try {
+            recordingFile.close();
+        } catch (IOException e) {
+            System.out.println("Could not close recording file: " + e.getMessage());
+        }
+        try {
+            recordingManager.setEndTime(recordingId, LocalDateTime.now());
+            System.out.println("Recording " + recordingId + " finished");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Could not save end time: " + e.getMessage());
+        }
+        recordingId = null;
+    }
+
+    private void handleGetRecordingData() throws IOException, ClassNotFoundException {
+        Object idData = connection.receiveObject();
+
+        if (!hasRole(Role.DOCTOR)) {
+            return;
+        }
+        if (!(idData instanceof Integer)) {
+            sendError("Invalid recording id");
+            return;
+        }
+
+        Recording recording = recordingManager.getRecordingById((Integer) idData);
+        if (recording == null) {
+            sendError("Recording not found");
+            return;
+        }
+        Patient patient = patientManager.getPatientById(recording.getPatientId());
+        Doctor doctor = doctorManager.getDoctorByUserId(loggedUser.getId());
+        if (patient == null || doctor == null || !doctor.getId().equals(patient.getDoctorId())) {
+            sendError("This recording is not from one of your patients");
+            return;
+        }
+
+        try {
+            int[] samples = RecordingFileWriter.readAll(recording.getFilePath());
+            connection.sendCommand(Commands.OK);
+            connection.sendObject(samples);
+        } catch (IOException e) {
+            System.out.println("Could not read recording " + recording.getId() + ": " + e.getMessage());
+            sendError("Could not read the recording file");
         }
     }
 }

@@ -12,7 +12,7 @@ import java.util.Random;
 public class BitalinoRecorder {
 
     //Sampling rate for all recordings, samples per second.
-    public static final int SAMPLING_RATE=100;
+    public static final int SAMPLING_RATE=1000;
 
     //analog channel where ECG snesor is connected (0=A1, 1=A2,..)
     private static final int ECG_CHANNEL=1;
