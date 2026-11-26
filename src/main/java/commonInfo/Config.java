@@ -25,10 +25,14 @@ public class Config {
 
     public static String getServerHost() {
         String host = load().getProperty("server.host");
-        if (host == null || host.isBlank()) {
-            return DEFAULT_HOST;
+        if (host != null && !host.isBlank()) {
+            return host.trim();
         }
-        return host.trim();
+        String found = ServerFinder.findServer();
+        if (found != null) {
+            return found;
+        }
+        return DEFAULT_HOST;
     }
 
     public static int getServerPort() {

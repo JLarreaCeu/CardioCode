@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.Normalizer;
 
 public class AdminConsole implements Runnable {
 
@@ -96,29 +97,28 @@ public class AdminConsole implements Runnable {
     public void registerDoctor() throws IOException {
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
-        System.out.println("Doctor email (must end with @doctor.com):");
-        String email = reader.readLine();
-        System.out.println("Doctor password:");
-        String password = reader.readLine();
         System.out.println("Name:");
         String name = reader.readLine();
         System.out.println("Surname:");
         String surname = reader.readLine();
+        System.out.println("Doctor password:");
+        String password = reader.readLine();
 
-        if(email == null || password == null || name == null || surname == null) {
+        if(password == null || name == null || surname == null) {
             System.out.println("No input. Doctor not created");
             return;
         }
 
-        if(!email.trim().toLowerCase().endsWith("@doctor.com")){
-            System.out.println("Doctor emails must end with @doctor.com. Doctor not created");
+        if(firstWord(name).isEmpty() || firstWord(surname).isEmpty()) {
+            System.out.println("Name and surname must have letters. Doctor not created");
             return;
         }
 
         UserManager userManager = new JDBCUserManager();
         DoctorManager doctorManager = new JDBCDoctorManager();
 
-        User user = new User(email.trim(), password, Role.DOCTOR);
+        String email = generateDoctorEmail(name, surname, userManager);
+        User user = new User(email, password, Role.DOCTOR);
         try{
             userManager.newUser(user);
         } catch (IllegalArgumentException | IllegalStateException e){
@@ -135,6 +135,7 @@ public class AdminConsole implements Runnable {
             return;
         }
         System.out.println("Doctor " + doctor.getName() + " " + doctor.getSurname() + " created");
+        System.out.println("Email: " + email);
     }
 
     @Override
@@ -192,5 +193,22 @@ public class AdminConsole implements Runnable {
         System.out.println("3. Shut down server");
         System.out.println("Choose an option:");
     }
-}
 
+    private String generateDoctorEmail(String name, String surname, UserManager userManager) {
+        String base = firstWord(name) + "." + firstWord(surname);
+        String email = base + "@doctor.com";
+        int number = 2;
+        while (userManager.getUserByEmail(email) != null) {
+            email = base + number + "@doctor.com";
+            number++;
+        }
+        return email;
+    }
+
+    private String firstWord(String text) {
+        String clean = Normalizer.normalize(text.trim().toLowerCase(), Normalizer.Form.NFD);
+        clean = clean.replaceAll("\\p{M}", "");
+        String[] words = clean.split("\\s+");
+        return words[0].replaceAll("[^a-z]", "");
+    }
+}
