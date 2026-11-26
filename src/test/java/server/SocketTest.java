@@ -1,13 +1,6 @@
 package server;
 
-import commonInfo.Commands;
-import commonInfo.Doctor;
-import commonInfo.Patient;
-import commonInfo.PatientHistory;
-import commonInfo.Role;
-import commonInfo.SocketConnection;
-import commonInfo.SymptomReport;
-import commonInfo.User;
+import commonInfo.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -20,8 +13,8 @@ import java.util.ArrayList;
 
 public class SocketTest {
 
-    private static final String HOST = "localhost";
-    private static final int PORT = 6767;
+    private static final String HOST = Config.getServerHost();
+    private static final int PORT = Config.getServerPort();
 
     private static int passed = 0;
     private static int failed = 0;

@@ -12,7 +12,7 @@ import java.util.List;
  */
 public class PatientClient implements Pings {
 
-    private static final int PORT = 6767;
+    private static final int PORT = Config.getServerPort();
     private final SocketConnection con;
     private final Socket socket;
     //User logged in through this connection.
