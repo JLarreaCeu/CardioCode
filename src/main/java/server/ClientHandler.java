@@ -483,7 +483,7 @@ public class ClientHandler implements Runnable {
 
         Recording recording = new Recording(patient.getId(), LocalDateTime.now(), SAMPLING_RATE, CHANNEL, UNITS);
         try {
-            recording.setFilePath(recordingFile.open(patient.getId()));
+            recording.setFilePath(recordingFile.open(patient.getName(), patient.getSurname()));
             recordingManager.addRecording(recording);
         } catch (IOException | IllegalArgumentException | IllegalStateException e) {
             recordingFile.close();

@@ -141,16 +141,43 @@ public class SocketTest {
             patientCon.sendCommand(Commands.GET_PATIENTS);
             check("GET_PATIENTS as a patient answers ERROR", readError(patientCon));
 
-            // 12. SEND_SYMPTOMS
+            // 12. SEND_SYMPTOMS sin grabacion (cada informe tiene que ir unido a una grabacion)
             SymptomReport report = new SymptomReport(null, LocalDateTime.now(), true, false, false, false, true, 10, "Test report");
             patientCon.sendCommand(Commands.SEND_SYMPTOMS);
             patientCon.sendObject(report);
-            check("SEND_SYMPTOMS answers OK", readOk(patientCon));
+            check("SEND_SYMPTOMS without a recording answers ERROR", readError(patientCon));
+
+            // 12b. Grabacion corta: START, un bloque con EMG y ECG, STOP
+            patientCon.sendCommand(Commands.START_RECORDING);
+            check("START_RECORDING answers OK", readOk(patientCon));
+            patientCon.sendCommand(Commands.SIGNAL_DATA);
+            patientCon.sendObject(new int[][]{{500, 510, 520}, {600, 610, 620}});
+            check("SIGNAL_DATA with EMG and ECG answers OK", readOk(patientCon));
+            patientCon.sendCommand(Commands.STOP_RECORDING);
+            check("STOP_RECORDING answers OK", readOk(patientCon));
+
+            patientCon.sendCommand(Commands.GET_PATIENT_HISTORY);
+            patientCon.sendObject(null);
+            PatientHistory history = readHistory(patientCon);
+            Integer recordingId = null;
+            String filePath = null;
+            if (history != null && history.getRecordings().size() == 1) {
+                recordingId = history.getRecordings().get(0).getId();
+                filePath = history.getRecordings().get(0).getFilePath();
+            }
+            check("The recording is in the patient's history", recordingId != null);
+            check("The recording file has the patient's name: " + filePath, filePath != null && filePath.contains("Test_Patient_"));
+
+            // 12c. SEND_SYMPTOMS unido a la grabacion
+            report.setSessionId(recordingId);
+            patientCon.sendCommand(Commands.SEND_SYMPTOMS);
+            patientCon.sendObject(report);
+            check("SEND_SYMPTOMS linked to the recording answers OK", readOk(patientCon));
 
             // 13. El paciente pide su historial (manda null)
             patientCon.sendCommand(Commands.GET_PATIENT_HISTORY);
             patientCon.sendObject(null);
-            PatientHistory history = readHistory(patientCon);
+            history = readHistory(patientCon);
             check("GET_PATIENT_HISTORY as patient answers OK + 1 report", history != null && history.getReports().size() == 1);
 
             // 14. ADD_NOTE siendo paciente
@@ -183,6 +210,18 @@ public class SocketTest {
                 reportId = history.getReports().get(0).getId();
             }
             check("GET_PATIENT_HISTORY as doctor answers OK + the report", reportId != null);
+
+            // 16b. El medico pide la grabacion
+            doctorCon.sendCommand(Commands.GET_RECORDING_DATA);
+            doctorCon.sendObject(recordingId);
+            boolean twoSignals = false;
+            if (doctorCon.receiveCommand() == Commands.OK) {
+                int[][] samples = (int[][]) doctorCon.receiveObject();
+                twoSignals = samples.length == 2 && samples[1].length == 3 && samples[1][0] == 600;
+            } else {
+                doctorCon.receiveObject();
+            }
+            check("GET_RECORDING_DATA as doctor answers OK + EMG and ECG", twoSignals);
 
             // 17. Historial de un paciente que no existe o no es suyo
             doctorCon.sendCommand(Commands.GET_PATIENT_HISTORY);
