@@ -102,12 +102,6 @@ public class GUI {
 
 
         void showLogin() {
-            // sttauts Server
-            Circle dot = new Circle(4, GUI.GRIS_OFFLINE);
-            Label serverLabel = new Label("Server: not connected", dot);
-            serverLabel.setGraphicTextGap(8);
-            GUI.chip(serverLabel);
-
             Label title = new Label("Welcome back");
             GUI.title(title, 30);
             Label subtitle = new Label("Sign in to your account");
@@ -139,7 +133,6 @@ public class GUI {
             signUpRow.setAlignment(Pos.CENTER);
 
             VBox form = new VBox(20,
-                    serverLabel,
                     new VBox(6, title, subtitle),
                     fieldBox("Email", emailField, emailError),
                     fieldBox("Password", passwordField, passwordError),
