@@ -1,9 +1,6 @@
 package gui;
 
-import commonInfo.Doctor;
-import commonInfo.Patient;
-import commonInfo.Role;
-import commonInfo.User;
+import commonInfo.*;
 import doctor.DoctorClient;
 import patient.PatientClient;
 import javafx.animation.Animation;
@@ -51,7 +48,7 @@ public class GUI {
 
 
     public static class App extends Application {
-        private static final String SERVER_ADDRESS = "localhost";
+        private static final String SERVER_ADDRESS = Config.getServerHost();
 
         private Stage stage;
         private Scene scene;

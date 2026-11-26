@@ -1,5 +1,6 @@
 package server;
 
+import commonInfo.Config;
 import server.db.jdbc.JDBCManager;
 
 import java.io.IOException;
@@ -10,7 +11,7 @@ import java.util.List;
 
 public class HospitalServer {
 
-    private static final int PORT = 6767;
+    private static final int PORT = Config.getServerPort();
     private ServerSocket serverSocket;
     private List<ClientHandler> clients = new ArrayList<>();
     private volatile boolean running = true; //volatile me salio investigando es para que todos los hilos vean si el servidor sigue encendido tipo para que los cambios de una var se vean al momento
