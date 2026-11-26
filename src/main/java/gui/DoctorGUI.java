@@ -265,6 +265,12 @@ public class DoctorGUI {
         HBox personalCard = new HBox(16, personal, personalSpacer, editButton);
         personalCard.setAlignment(Pos.CENTER_LEFT);
         GUI.card(personalCard);
+        List<Recording> recordings = new ArrayList<>();
+        if (history.getRecordings() != null) {
+            recordings.addAll(history.getRecordings());}
+        recordings.sort(Comparator.comparing(Recording::getStartTime,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
         List<SymptomReport> reports = new ArrayList<>();
         if (history.getReports() != null) {
             reports.addAll(history.getReports());
@@ -277,32 +283,13 @@ public class DoctorGUI {
             reportsBox.getChildren().add(emptyCard("This patient has not sent any symptom reports yet."));
         } else {
             for (SymptomReport report : reports) {
-                reportsBox.getChildren().add(reportCard(report, patientId));
-            }
-        }
-
-
-        List<Recording> recordings = new ArrayList<>();
-        if (history.getRecordings() != null) {
-            recordings.addAll(history.getRecordings());
-        }
-        recordings.sort(Comparator.comparing(Recording::getStartTime,
-                Comparator.nullsLast(Comparator.reverseOrder())));
-
-        VBox recordingsBox = new VBox(12, sectionTitle("ECG recordings (" + recordings.size() + ")"));
-        if (recordings.isEmpty()) {
-            recordingsBox.getChildren().add(emptyCard("This patient has not recorded any ECG yet."));
-        } else {
-            for (Recording recording : recordings) {
-                recordingsBox.getChildren().add(recordingRow(recording, patientId));
-            }
-        }
-
-        mainFrame.setScreen(scrollPage(new VBox(20, backLink, titleBox, personalCard, reportsBox, recordingsBox)));
+                reportsBox.getChildren().add(reportCard(report, patientId, recordings));
+            }}
+        mainFrame.setScreen(scrollPage(new VBox(20, backLink, titleBox, personalCard, reportsBox)));
     }
 
     /** Tarjeta de un informe con el comentario  */
-    private VBox reportCard(SymptomReport report, Integer patientId) {
+    private VBox reportCard(SymptomReport report, Integer patientId, List<Recording> recordings) {
         String doctorText = report.getDoctorComment();
         boolean reviewed = doctorText != null && !doctorText.isBlank();
 
@@ -320,9 +307,7 @@ public class DoctorGUI {
 
         HBox state = new HBox(32,
                 PatientGUI.infoPair("Physical", PatientGUI.commentPart(report.getComments(), "Physical")),
-                PatientGUI.infoPair("Mood", PatientGUI.commentPart(report.getComments(), "Mood")),
-                PatientGUI.infoPair("Duration", report.getEpisodeMinutes() > 0
-                        ? report.getEpisodeMinutes() + " min" : null));
+                PatientGUI.infoPair("Mood", PatientGUI.commentPart(report.getComments(), "Mood")));
 
         Label symptomsLabel = new Label("Symptoms");
         GUI.muted(symptomsLabel);
@@ -338,7 +323,16 @@ public class DoctorGUI {
             chips.getChildren().add(none);
         }
 
-        VBox card = new VBox(16, top, state, new VBox(6, symptomsLabel, chips));
+        Recording session = PatientGUI.findRecording(recordings, report.getSessionId());
+        Button viewEcg = null;
+        if (session != null) {
+            viewEcg = new Button("View ECG");
+            GUI.secondaryButton(viewEcg);
+            viewEcg.setOnAction(e -> showRecording(session, patientId));
+        }
+
+        VBox card = new VBox(16, top, state, new VBox(6, symptomsLabel, chips),
+                PatientGUI.sessionBox(report.getSessionId(), recordings, viewEcg));
 
         String notes = PatientGUI.commentPart(report.getComments(), "Notes");
         if (notes != null) {
@@ -398,28 +392,11 @@ public class DoctorGUI {
         return card;
     }
 
-    /** Fila de una grabación */
-    private HBox recordingRow(Recording recording, Integer patientId) {
-        Label date = new Label(recording.getStartTime().format(PatientGUI.REPORT_DATE));
-        GUI.text(date, 15, true, GUI.AZUL_NOCHE);
-        Label info = new Label(recording.getSamplingRate() + " Hz, channel " + recording.getChannel());
-        GUI.muted(info);
-        Button viewButton = new Button("View ECG");
-        GUI.secondaryButton(viewButton);
-        viewButton.setOnAction(e -> showRecording(recording, patientId));
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox row = new HBox(16, new VBox(4, date, info), spacer, viewButton);
-        row.setAlignment(Pos.CENTER_LEFT);
-        GUI.card(row);
-        return row;}
-
     /** GET_RECORDING_DATA */
     private void showRecording(Recording recording, Integer patientId) {
         Hyperlink backLink = new Hyperlink("← Back to the patient");
         GUI.link(backLink);
         backLink.setOnAction(e -> showPatientHistory(patientId, null));
-        // pedir al servidor
         int[] samples;
         try {
             samples = doctorClient.getRecordingData(recording.getId());

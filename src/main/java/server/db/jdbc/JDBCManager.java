@@ -60,7 +60,8 @@ public class JDBCManager {
                 episode_minutes     INTEGER NOT NULL DEFAULT 0 CHECK (episode_minutes >= 0),
                 comments            TEXT,
                 doctor_comment      TEXT,
-                doctor_comment_time TEXT
+                doctor_comment_time TEXT,
+                session_id          INTEGER REFERENCES recordings(id)
             )""";
 
     private static final String CREATE_RECORDINGS = """
@@ -106,8 +107,8 @@ public class JDBCManager {
             stmt.executeUpdate(CREATE_USERS);
             stmt.executeUpdate(CREATE_DOCTORS);
             stmt.executeUpdate(CREATE_PATIENTS);
-            stmt.executeUpdate(CREATE_SYMPTOM_REPORTS);
             stmt.executeUpdate(CREATE_RECORDINGS);
+            stmt.executeUpdate(CREATE_SYMPTOM_REPORTS);
         }
     }
 }

@@ -48,6 +48,7 @@ public class GUI {
 
 
     public static class App extends Application {
+        private static final String SERVER_ADDRESS = Config.getServerHost();
 
         private Stage stage;
         private Scene scene;
@@ -172,7 +173,7 @@ public class GUI {
             PatientClient patientClient = null;
             User user;
             try {
-                patientClient = new PatientClient(Config.getServerHost());
+                patientClient = new PatientClient(SERVER_ADDRESS);
                 user = patientClient.login(email, password);
             } catch (IOException e) {
                 close(patientClient);
@@ -204,7 +205,7 @@ public class GUI {
         private void openDoctor(String email, String password) {
             DoctorClient doctorClient = null;
             try {
-                doctorClient = new DoctorClient(Config.getServerHost());
+                doctorClient = new DoctorClient(SERVER_ADDRESS);
                 User user = doctorClient.login(email, password);
                 doctorMn = new DoctorGUI(user, this, doctorClient);
             } catch (IOException e) {
@@ -310,7 +311,7 @@ public class GUI {
         private void loadDoctors() {
             PatientClient client = null;
             try {
-                client = new PatientClient(Config.getServerHost());
+                client = new PatientClient(SERVER_ADDRESS);
                 List<Doctor> doctors = client.getDoctors();
                 doctorBox.getItems().setAll(doctors);
                 if (doctors.isEmpty()) {
@@ -409,7 +410,7 @@ public class GUI {
 
             PatientClient client = null;
             try {
-                client = new PatientClient(Config.getServerHost());
+                client = new PatientClient(SERVER_ADDRESS);
                 client.register(email, password, patient);
             } catch (IOException e) {
                 showMessage(signUpMessage, "Can't reach the hospital server. Try again.");

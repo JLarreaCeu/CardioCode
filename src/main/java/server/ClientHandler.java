@@ -16,6 +16,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 public class ClientHandler implements Runnable {
@@ -32,8 +33,8 @@ public class ClientHandler implements Runnable {
     private RecordingFileWriter recordingFile;
     private Integer recordingId;
     private static final int SAMPLING_RATE = 1000;
-    private static final String CHANNEL = "ECG";
-    private static final String UNITS = "ADC";
+    private static final String CHANNEL = "EMG:A1,ECG:A2";
+    private static final String UNITS = "ADC,ADC";
 
     public ClientHandler(Socket socket, HospitalServer server) {
         this.socket = socket;
@@ -186,6 +187,17 @@ public class ClientHandler implements Runnable {
 
         SymptomReport report = (SymptomReport) data;
         report.setPatientId(patient.getId());
+
+        if (report.getSessionId() == null) {
+            sendError(" report must belong to recording");
+            return;
+        }
+        Recording session = recordingManager.getRecordingById(report.getSessionId());
+        if (session == null || !patient.getId().equals(session.getPatientId())) {
+            sendError("That ECG recording does not belong to you");
+            return;
+        }// El episodio dura lo que duró la grabación
+        report.setEpisodeMinutes(episodeMinutes(session));
         try {
             symptomManager.addReport(report);
             connection.sendCommand(Commands.OK);
@@ -194,6 +206,18 @@ public class ClientHandler implements Runnable {
             System.out.println("Could not save symptom report: " + e.getMessage());
             sendError("Could not save the symptom report");
         }
+    }
+
+    /**
+     * Minutos que duró una grabación
+     */
+    private int episodeMinutes(Recording recording) {
+        if (recording.getStartTime() == null) {
+            return 0;
+        }
+        LocalDateTime end = recording.getEndTime() != null ? recording.getEndTime() : LocalDateTime.now();
+        long seconds = Math.max(0, Duration.between(recording.getStartTime(), end).getSeconds());
+        return (int) ((seconds + 59) / 60);
     }
 
     private boolean hasRole(Role role) throws IOException {
@@ -228,7 +252,12 @@ public class ClientHandler implements Runnable {
                 sendError("This email is reserved for doctors");
                 return;
             }
-            if (patient.getDoctorId() != null && doctorManager.getDoctorById(patient.getDoctorId()) == null) {
+            // Todo paciente tiene que tener un médico asignado, y tiene que existir
+            if (patient.getDoctorId() == null) {
+                sendError("Choose a doctor for the patient");
+                return;
+            }
+            if (doctorManager.getDoctorById(patient.getDoctorId()) == null) {
                 sendError("The chosen doctor does not exist");
                 return;
             }
@@ -477,12 +506,12 @@ public class ClientHandler implements Runnable {
             sendError("There is no recording in progress");
             return;
         }
-        if (!(data instanceof int[])) {
+        if (!(data instanceof int[][]) || ((int[][]) data).length < 2) {
             sendError("Invalid signal data");
             return;
         }
         try {
-            recordingFile.writeBlock((int[]) data);
+            recordingFile.writeBlock((int[][]) data);
             connection.sendCommand(Commands.OK);
         } catch (IOException e) {
             System.out.println("Could not write signal data: " + e.getMessage());
@@ -544,7 +573,7 @@ public class ClientHandler implements Runnable {
         }
 
         try {
-            int[] samples = RecordingFileWriter.readAll(recording.getFilePath());
+            int[][] samples = RecordingFileWriter.readAll(recording.getFilePath());
             connection.sendCommand(Commands.OK);
             connection.sendObject(samples);
         } catch (IOException e) {

@@ -8,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,7 +17,7 @@ public class JDBCSymptomManager implements SymptomManager {
 
     private static final String SELECT_REPORTS =
             "SELECT id, patient_id, date_time, palpitations, dizziness, shortness_of_breath, "
-                    + "chest_pain, fatigue, episode_minutes, comments, doctor_comment, doctor_comment_time "
+                    + "chest_pain, fatigue, episode_minutes, comments, doctor_comment, doctor_comment_time, session_id "
                     + "FROM symptom_reports ";
 
     @Override
@@ -35,8 +36,8 @@ public class JDBCSymptomManager implements SymptomManager {
         }
 
         String sql = "INSERT INTO symptom_reports (patient_id, date_time, palpitations, dizziness, "
-                + "shortness_of_breath, chest_pain, fatigue, episode_minutes, comments) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "shortness_of_breath, chest_pain, fatigue, episode_minutes, comments, session_id) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection c = JDBCManager.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, report.getPatientId());
@@ -48,6 +49,7 @@ public class JDBCSymptomManager implements SymptomManager {
             ps.setInt(7, toInt(report.isFatigue()));
             ps.setInt(8, report.getEpisodeMinutes());
             ps.setString(9, report.getComments());
+            ps.setInt(10, report.getSessionId());
             ps.executeUpdate();
             report.setId(lastInsertedId(c));
         } catch (SQLException e) {
@@ -113,7 +115,10 @@ public class JDBCSymptomManager implements SymptomManager {
         report.setEpisodeMinutes(rs.getInt("episode_minutes"));
         report.setComments(rs.getString("comments"));
         report.setDoctorComment(rs.getString("doctor_comment"));
-
+        int sessionId = rs.getInt("session_id");
+        if (!rs.wasNull()) {
+            report.setSessionId(sessionId);
+        }
         String commentTime = rs.getString("doctor_comment_time");
         if (commentTime != null) {
             report.setDoctorCommentTime(LocalDateTime.parse(commentTime));
