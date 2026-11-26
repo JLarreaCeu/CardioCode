@@ -124,7 +124,7 @@ public class PatientClient implements Pings {
         expectConfirmation();
     }
 
-    public synchronized void sendSignalBlock(int []samples)throws IOException,ServerException{
+    public synchronized void sendSignalBlock(int [][]samples)throws IOException,ServerException{
         con.sendCommand(Commands.SIGNAL_DATA);
         con.sendObject(samples);
         expectConfirmation();
@@ -140,7 +140,7 @@ public class PatientClient implements Pings {
         startRecording();
         RecordingSession session=new RecordingSession(recorder, seconds, new RecordingSession.Listener() {
             @Override
-            public void onBlock(int[] samples) throws IOException {
+            public void onBlock(int[][] samples) throws IOException {
                 try{
                     sendSignalBlock(samples);
                 }catch(ServerException e){

@@ -18,6 +18,8 @@ public class RecordingFileWriter implements AutoCloseable {
     private static final Path RECORDINGS_DIR = Paths.get("recordings");
     private static final DateTimeFormatter FILE_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
 
+    private static final String HEADER= "EMG_adc, ECG_adc";
+
     private BufferedWriter writer;
     private Path filePath;
 
@@ -38,16 +40,17 @@ public class RecordingFileWriter implements AutoCloseable {
         return filePath.toString();
     }
 
-    public void writeBlock(int[] samples) throws IOException {
+    public void writeBlock(int[][] samples) throws IOException {
         if (writer == null) {
             throw new IllegalStateException("No recording is open");
 
         }
-        if (samples == null) {
+        if (samples == null || samples.length<2) {
             return;
         }
-        for (int sample : samples) {
-            writer.write(Integer.toString(sample));
+        int n=Math.min(samples[0].length,samples[1].length);
+        for (int i=0; i<n; i++) {
+            writer.write(samples[0][i]+","+samples[1][i]);
             writer.newLine();
         }
         writer.flush();
@@ -78,9 +81,10 @@ public class RecordingFileWriter implements AutoCloseable {
     }
 
 
-    public static int[] readAll(String path) throws IOException {
+    public static int[][] readAll(String path) throws IOException {
         List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
-        int[] samples = new int[lines.size()];
+        int[] emg = new int[lines.size()];
+        int[] ecg = new int[lines.size()];
 
         int count = 0;
 
@@ -89,12 +93,18 @@ public class RecordingFileWriter implements AutoCloseable {
             if (text.isEmpty()) {
                 continue;
             }
+            String[]parts=text.split(",");
             try {
-                samples[count] = Integer.parseInt(text);
+                if(parts.length>=2){
+                    emg[count]=Integer.parseInt(parts[0].trim());
+                    ecg[count]=Integer.parseInt(parts[1].trim());
+                }else{
+                    ecg[count]=Integer.parseInt(parts[0].trim());
+                }
                 count++;
             } catch (NumberFormatException e) {
             }
         }
-        return Arrays.copyOf(samples, count);
+        return new int [][]{Arrays.copyOf(emg, count),Arrays.copyOf(ecg,count)};
     }
 }

@@ -3,6 +3,7 @@ import bitalino.BITalino;
 import bitalino.BITalinoErrorTypes;
 import bitalino.BITalinoException;
 import bitalino.Frame;
+import commonInfo.Patient;
 
 import java.util.Random;
 
@@ -15,16 +16,23 @@ public class BitalinoRecorder {
     public static final int SAMPLING_RATE=1000;
 
     //analog channel where ECG snesor is connected (0=A1, 1=A2,..)
+    private static final int EMG_CHANNEL=0;
     private static final int ECG_CHANNEL=1;
 
+    public static final int EMG_ROW=0;
+    public static final int ECG_ROW=1;
+
     //name of ECG channel as stored in recording (channel field).
+    public static final String EMG_CHANNEL_NAME="A1";
     public static final String ECG_CHANNEL_NAME="A2";
 
     //Supply voltage of BITalino, in volts (to convert to mV)
     private static final double VCC=3.3;
 
     //Gain of the BITalino ECG sensor (to convert to mV)
+    private static final double EMG_GAIN=1009;
     private static final double ECG_GAIN=1100;
+
 
     //Duration of one simulated heartbeat in normal rhythm in seconds (75 beats per minute)
     private static final double FAKE_BEAT_LENGTH=0.8;
@@ -32,6 +40,9 @@ public class BitalinoRecorder {
     //Shortest and longest simulated hertbeat in AF, in seconds.
     private static final double AF_MIN_BEAT_LENGTH=0.45;
     private static final double AF_MAX_BEAT_LENGTH=1.1;
+
+    private static final double FAKE_EMG_PERIOD=4.0;
+    private static final double FAKE_EMG_BURST=1.0;
 
     //True if the recorder generate a simulted signal instead of using the device
     private final boolean testMode;
@@ -108,7 +119,7 @@ public class BitalinoRecorder {
         bitalino=new BITalino();
         bitalino.open(macAdress,SAMPLING_RATE);
         try{
-            bitalino.start(new int[]{ECG_CHANNEL});
+            bitalino.start(new int[]{ECG_CHANNEL, ECG_CHANNEL});
         }catch (BITalinoException e){
             throw e;
         }catch(Throwable t){
@@ -124,17 +135,20 @@ public class BitalinoRecorder {
      * @throws BITalinoException if communication fails.
      * @throws InterruptedException if thread is interrupted in waiting mode.
      */
-    public int[] readBlock(int blockSize) throws BITalinoException,InterruptedException{
-        int[] samples=new int[blockSize];
+    public int[][] readBlock(int blockSize) throws BITalinoException,InterruptedException{
+        int[][] samples=new int[2][blockSize];
         if(testMode){
             Thread.sleep(blockSize*1000L/SAMPLING_RATE);
             for(int i=0; i<blockSize;i++){
-                samples[i]=fakeEcgSample();
+                samples[EMG_ROW][i]=fakeEmgSample();
+                samples[ECG_ROW][i]=fakeEcgSample();
+                sampleCounter++;
             }
         }else{
             Frame[] frames=bitalino.read(blockSize);
             for (int i=0; i<frames.length;i++){
-                samples[i]=frames[i].analog[0];
+                samples[EMG_ROW][i]=frames[i].analog[0]; //A1
+                samples[ECG_ROW][i]=frames[i].analog[1]; //A2
             }
         }
         return samples;
@@ -157,15 +171,13 @@ public class BitalinoRecorder {
         }
     }
 
-    /**
-     * Converts a raw ECG value from the BITalino (0-1023) to mv.
-     * @param adcValue raw value read from device
-     * @return adcValue in mv.
-     */
-    public static double toMillivolts(int adcValue){
+
+    public static double ecgTtoMillivolts(int adcValue){
         return(adcValue/1024.0-0.5)*VCC/ECG_GAIN*1000;
     }
-
+    public static double emgToMillivolts(int adcValue){
+        return(adcValue/1024.0-0.5)*VCC/EMG_GAIN*100;
+    }
     /**
      * Generates the next sample of simulated ECG.
      * @return Simuated ECG value, between 0-1023.
@@ -190,6 +202,15 @@ public class BitalinoRecorder {
             value=value+wave(t,0.16,40,0.025); //P wave
         }
         sampleCounter++;
+        return(int)Math.max(0,Math.min(1023,Math.round(value)));
+
+    }
+
+    private int fakeEmgSample(){
+        double seconds=sampleCounter/(double)SAMPLING_RATE;
+        boolean contraction=(seconds%FAKE_EMG_PERIOD)>FAKE_EMG_BURST;
+        double amplitude=contraction?120:6;
+        double value=512+random.nextGaussian()*amplitude;
         return(int)Math.max(0,Math.min(1023,Math.round(value)));
 
     }

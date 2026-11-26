@@ -14,7 +14,7 @@ public class RecordingSession implements Runnable{
          * @param samples samples ecg values of the block
          * @throws IOException if block cannot be sent.
          */
-        void onBlock(int[] samples) throws IOException;
+        void onBlock(int[][] samples) throws IOException;
 
         /**
          * Called once when recording ends.
@@ -65,7 +65,7 @@ public class RecordingSession implements Runnable{
         try{
             recorder.start();
             while(!stopRequested&&!isDurationReached(maxSamples)){
-                int[]block=recorder.readBlock(BLOCK_SIZE);
+                int[][]block=recorder.readBlock(BLOCK_SIZE);
                 block=cutToDuration(block,maxSamples);
                 listener.onBlock(block);
                 sampleCount=sampleCount+ block.length;
@@ -112,7 +112,7 @@ public class RecordingSession implements Runnable{
     }
 
 
-    private int[] cutToDuration(int[]block, long maxSamples){
+    private int[][] cutToDuration(int[][]block, long maxSamples){
         if(durationSeconds<=0){
             return block;
         }
@@ -120,7 +120,7 @@ public class RecordingSession implements Runnable{
         if(block.length<=remaining){
             return block;
         }
-        int[]cut=new int[(int)remaining];;
+        int[][]cut=new int[block.length][(int)remaining];;
         System.arraycopy(block,0,cut,0,cut.length);
         return cut;
     }
