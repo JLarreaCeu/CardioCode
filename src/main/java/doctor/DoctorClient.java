@@ -87,12 +87,12 @@ public class DoctorClient implements Pings {
         return (Patient) receive();
     }
 
-    /** GET_RECORDING_DATA valores del BITalino 0-1023 */
-    public synchronized int[] getRecordingData(Integer recordingId) throws IOException, ServerException {
+    /** GET_RECORDING_DATA valores del BITalino 0-1023*/
+    public synchronized int[][] getRecordingData(Integer recordingId) throws IOException, ServerException {
         con.sendCommand(Commands.GET_RECORDING_DATA);
         con.sendObject(recordingId);
         expectConfirmation();
-        return (int[]) receive();
+        return (int[][]) receive();
     }
 
     public synchronized void logout() throws IOException {

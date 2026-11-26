@@ -7,6 +7,7 @@ import commonInfo.Recording;
 import commonInfo.SymptomReport;
 import commonInfo.User;
 import doctor.DoctorClient;
+import patient.BitalinoRecorder;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.canvas.Canvas;
@@ -397,29 +398,41 @@ public class DoctorGUI {
         Hyperlink backLink = new Hyperlink("← Back to the patient");
         GUI.link(backLink);
         backLink.setOnAction(e -> showPatientHistory(patientId, null));
-        int[] samples;
+        int[][] samples;
         try {
             samples = doctorClient.getRecordingData(recording.getId());
         } catch (Exception e) {
             showErrorPage(backLink, "Could not load the recording: " + e.getMessage());
             return;}
-        Label title = new Label("ECG recording");
+        int[] ecg = samples[BitalinoRecorder.ECG_ROW];
+        int[] emg = samples[BitalinoRecorder.EMG_ROW];
+
+        Label title = new Label("ECG and EMG recording");
         GUI.title(title, 28);
         // Cuanto dura
-        int seconds = samples.length / recording.getSamplingRate();
+        int seconds = ecg.length / recording.getSamplingRate();
         Label secondsLabel = new Label(seconds + " seconds");
         GUI.muted(secondsLabel);
-        Canvas canvas = new Canvas(1600, 620);
-        drawEcg(canvas, samples);
-        VBox card = new VBox(14, canvas, secondsLabel);
+
+        Label ecgLabel = new Label("ECG (A2)");
+        GUI.fieldLabel(ecgLabel);
+        Canvas ecgCanvas = new Canvas(1600, 320);
+        drawSignal(ecgCanvas, ecg);
+
+        Label emgLabel = new Label("EMG (A1)");
+        GUI.fieldLabel(emgLabel);
+        Canvas emgCanvas = new Canvas(1600, 320);
+        drawSignal(emgCanvas, emg);
+
+        VBox card = new VBox(14, ecgLabel, ecgCanvas, emgLabel, emgCanvas, secondsLabel);
         GUI.card(card);
         VBox content = new VBox(20, backLink, title, card);
         ScrollPane page = scrollPage(content);
         content.setMaxWidth(1724);
         mainFrame.setScreen(page);}
 
-    /** Dibuja señal. */
-    private void drawEcg(Canvas canvas, int[] samples) {
+    /** Dibuja una señal */
+    private void drawSignal(Canvas canvas, int[] samples) {
             GraphicsContext g = canvas.getGraphicsContext2D();
         double width = canvas.getWidth();
         double height = canvas.getHeight();

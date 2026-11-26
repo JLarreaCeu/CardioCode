@@ -117,7 +117,7 @@ public class RecordingSession implements Runnable{
             return block;
         }
         long remaining=maxSamples-sampleCount;
-        if(block.length<=remaining){
+        if(block[0].length<=remaining){
             return block;
         }
         int[][]cut=new int[block.length][(int)remaining];;

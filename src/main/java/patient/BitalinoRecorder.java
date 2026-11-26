@@ -119,7 +119,7 @@ public class BitalinoRecorder {
         bitalino=new BITalino();
         bitalino.open(macAdress,SAMPLING_RATE);
         try{
-            bitalino.start(new int[]{ECG_CHANNEL, ECG_CHANNEL});
+            bitalino.start(new int[]{EMG_CHANNEL, ECG_CHANNEL});
         }catch (BITalinoException e){
             throw e;
         }catch(Throwable t){
