@@ -9,7 +9,10 @@ import commonInfo.User;
 import doctor.DoctorClient;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
+import javafx.scene.paint.Color;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Hyperlink;
@@ -26,7 +29,6 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
@@ -263,6 +265,12 @@ public class DoctorGUI {
         HBox personalCard = new HBox(16, personal, personalSpacer, editButton);
         personalCard.setAlignment(Pos.CENTER_LEFT);
         GUI.card(personalCard);
+        List<Recording> recordings = new ArrayList<>();
+        if (history.getRecordings() != null) {
+            recordings.addAll(history.getRecordings());}
+        recordings.sort(Comparator.comparing(Recording::getStartTime,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
         List<SymptomReport> reports = new ArrayList<>();
         if (history.getReports() != null) {
             reports.addAll(history.getReports());
@@ -275,32 +283,13 @@ public class DoctorGUI {
             reportsBox.getChildren().add(emptyCard("This patient has not sent any symptom reports yet."));
         } else {
             for (SymptomReport report : reports) {
-                reportsBox.getChildren().add(reportCard(report, patientId));
-            }
-        }
-
-
-        List<Recording> recordings = new ArrayList<>();
-        if (history.getRecordings() != null) {
-            recordings.addAll(history.getRecordings());
-        }
-        recordings.sort(Comparator.comparing(Recording::getStartTime,
-                Comparator.nullsLast(Comparator.reverseOrder())));
-
-        VBox recordingsBox = new VBox(12, sectionTitle("ECG recordings (" + recordings.size() + ")"));
-        if (recordings.isEmpty()) {
-            recordingsBox.getChildren().add(emptyCard("This patient has not recorded any ECG yet."));
-        } else {
-            for (Recording recording : recordings) {
-                recordingsBox.getChildren().add(recordingRow(recording));
-            }
-        }
-
-        mainFrame.setScreen(scrollPage(new VBox(20, backLink, titleBox, personalCard, reportsBox, recordingsBox)));
+                reportsBox.getChildren().add(reportCard(report, patientId, recordings));
+            }}
+        mainFrame.setScreen(scrollPage(new VBox(20, backLink, titleBox, personalCard, reportsBox)));
     }
 
     /** Tarjeta de un informe con el comentario  */
-    private VBox reportCard(SymptomReport report, Integer patientId) {
+    private VBox reportCard(SymptomReport report, Integer patientId, List<Recording> recordings) {
         String doctorText = report.getDoctorComment();
         boolean reviewed = doctorText != null && !doctorText.isBlank();
 
@@ -318,9 +307,7 @@ public class DoctorGUI {
 
         HBox state = new HBox(32,
                 PatientGUI.infoPair("Physical", PatientGUI.commentPart(report.getComments(), "Physical")),
-                PatientGUI.infoPair("Mood", PatientGUI.commentPart(report.getComments(), "Mood")),
-                PatientGUI.infoPair("Duration", report.getEpisodeMinutes() > 0
-                        ? report.getEpisodeMinutes() + " min" : null));
+                PatientGUI.infoPair("Mood", PatientGUI.commentPart(report.getComments(), "Mood")));
 
         Label symptomsLabel = new Label("Symptoms");
         GUI.muted(symptomsLabel);
@@ -336,7 +323,16 @@ public class DoctorGUI {
             chips.getChildren().add(none);
         }
 
-        VBox card = new VBox(16, top, state, new VBox(6, symptomsLabel, chips));
+        Recording session = PatientGUI.findRecording(recordings, report.getSessionId());
+        Button viewEcg = null;
+        if (session != null) {
+            viewEcg = new Button("View ECG");
+            GUI.secondaryButton(viewEcg);
+            viewEcg.setOnAction(e -> showRecording(session, patientId));
+        }
+
+        VBox card = new VBox(16, top, state, new VBox(6, symptomsLabel, chips),
+                PatientGUI.sessionBox(report.getSessionId(), recordings, viewEcg));
 
         String notes = PatientGUI.commentPart(report.getComments(), "Notes");
         if (notes != null) {
@@ -396,30 +392,49 @@ public class DoctorGUI {
         return card;
     }
 
-    /** Fila de una grabación*/
-    private HBox recordingRow(Recording recording) {
-        Label when = new Label(recording.getStartTime() == null ? "—"
-                : recording.getStartTime().format(PatientGUI.REPORT_DATE));
-        GUI.text(when, 15, true, GUI.AZUL_NOCHE);
+    /** GET_RECORDING_DATA */
+    private void showRecording(Recording recording, Integer patientId) {
+        Hyperlink backLink = new Hyperlink("← Back to the patient");
+        GUI.link(backLink);
+        backLink.setOnAction(e -> showPatientHistory(patientId, null));
+        int[] samples;
+        try {
+            samples = doctorClient.getRecordingData(recording.getId());
+        } catch (Exception e) {
+            showErrorPage(backLink, "Could not load the recording: " + e.getMessage());
+            return;}
+        Label title = new Label("ECG recording");
+        GUI.title(title, 28);
+        // Cuanto dura
+        int seconds = samples.length / recording.getSamplingRate();
+        Label secondsLabel = new Label(seconds + " seconds");
+        GUI.muted(secondsLabel);
+        Canvas canvas = new Canvas(1600, 620);
+        drawEcg(canvas, samples);
+        VBox card = new VBox(14, canvas, secondsLabel);
+        GUI.card(card);
+        VBox content = new VBox(20, backLink, title, card);
+        ScrollPane page = scrollPage(content);
+        content.setMaxWidth(1724);
+        mainFrame.setScreen(page);}
 
-        String length = "In progress";
-        if (recording.getStartTime() != null && recording.getEndTime() != null) {
-            long seconds = Duration.between(recording.getStartTime(), recording.getEndTime()).getSeconds();
-            length = seconds + " s";
+    /** Dibuja señal. */
+    private void drawEcg(Canvas canvas, int[] samples) {
+            GraphicsContext g = canvas.getGraphicsContext2D();
+        double width = canvas.getWidth();
+        double height = canvas.getHeight();
+        g.setFill(Color.WHITE);
+        g.fillRect(0, 0, width, height);
+        g.setStroke(GUI.AZUL_NOCHE);
+        g.setLineWidth(1);
+        for (int i = 1; i < samples.length; i++) {
+            double x1 = (i - 1) * width / samples.length; //pixeles ppor muestra y donde quedan segun i
+            double x2 = i * width / samples.length;
+            double y1 = height - samples[i - 1] * height / 1023.0;
+            double y2 = height - samples[i] * height / 1023.0;
+            g.strokeLine(x1, y1, x2, y2);
         }
-        HBox data = new HBox(32,
-                PatientGUI.infoPair("Length", length),
-                PatientGUI.infoPair("Sampling rate", recording.getSamplingRate() + " Hz"),
-                PatientGUI.infoPair("Channel", blankToNull(recording.getChannel())),
-                PatientGUI.infoPair("Units", blankToNull(recording.getUnits())));
-
-        VBox info = new VBox(10, when, data);
-        HBox row = new HBox(info);
-        GUI.card(row);
-        return row;
     }
-
-
 
     /**UPDATE_PATIENT */
     private void showEditPatient(Patient patient) {

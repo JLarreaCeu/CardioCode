@@ -28,6 +28,7 @@ public class SymptomReport implements Serializable {
     private String doctorComments;      // comentarios del médico (null hasta que lo revisa)
     private String doctorComment;           // comentario del médico (null si aún no ha comentado)
     private LocalDateTime doctorCommentTime; // cuándo lo escribió
+    private Integer sessionId;               // sesión de ECG (recordings.id) a la que pertenece el informe
 
     public SymptomReport() {
     }
@@ -149,6 +150,14 @@ public class SymptomReport implements Serializable {
 
     public void setDoctorCommentTime(LocalDateTime doctorCommentTime) {
         this.doctorCommentTime = doctorCommentTime;
+    }
+
+    public Integer getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(Integer sessionId) {
+        this.sessionId = sessionId;
     }
 
     @Override

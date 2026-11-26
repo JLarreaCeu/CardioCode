@@ -1,12 +1,6 @@
 package doctor;
 
-import commonInfo.Commands;
-import commonInfo.Doctor;
-import commonInfo.Patient;
-import commonInfo.PatientHistory;
-import commonInfo.Pings;
-import commonInfo.SocketConnection;
-import commonInfo.User;
+import commonInfo.*;
 
 import java.io.IOException;
 import java.net.Socket;
@@ -15,7 +9,7 @@ import java.util.List;
 
 public class DoctorClient implements Pings {
 
-    private static final int PORT = 6767;
+    private static final int PORT = Config.getServerPort();
     private final SocketConnection con;
     private final Socket socket;
     private User loggedUser;
@@ -91,6 +85,14 @@ public class DoctorClient implements Pings {
         con.sendObject(patient);
         expectConfirmation();
         return (Patient) receive();
+    }
+
+    /** GET_RECORDING_DATA valores del BITalino 0-1023 */
+    public synchronized int[] getRecordingData(Integer recordingId) throws IOException, ServerException {
+        con.sendCommand(Commands.GET_RECORDING_DATA);
+        con.sendObject(recordingId);
+        expectConfirmation();
+        return (int[]) receive();
     }
 
     public synchronized void logout() throws IOException {

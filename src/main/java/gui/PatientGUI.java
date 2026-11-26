@@ -2,8 +2,10 @@ package gui;
 
 import commonInfo.Patient;
 import commonInfo.PatientHistory;
+import commonInfo.Recording;
 import commonInfo.User;
 import commonInfo.SymptomReport;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
@@ -24,9 +26,12 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import patient.BitalinoRecorder;
 import patient.PatientClient;
+import patient.RecordingSession;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -38,8 +43,6 @@ import java.util.Locale;
  * Menú del paciente. Se abre desde GUI al hacer login.
  */
 public class PatientGUI {
-
-    // Sin "private": DoctorGUI también los usa para pintar los informes igual
     static final DateTimeFormatter REPORT_DATE = DateTimeFormatter.ofPattern("EEE d MMM yyyy · HH:mm", Locale.ENGLISH);
     static final Color DOCTOR_GREEN = Color.web("#1E8E3E");
     static final Color DOCTOR_GREEN_BG = Color.web("#E6F4EA");
@@ -49,22 +52,27 @@ public class PatientGUI {
     private final User user;
     private final GUI.App mainFrame;
     private final PatientClient patientClient;
+    private RecordingSession session;
 
     private Label message;
 
 
     private Patient patient;
     private final List<SymptomReport> reports = new ArrayList<>();
+    private final List<Recording> recordings = new ArrayList<>();
 
     public PatientGUI(User user, GUI.App mainFrame, PatientClient patientClient) {
         this.user = user;
         this.mainFrame = mainFrame;
         this.patientClient = patientClient;
         String loadError = loadHistory();
-        showPatientMenu();
-        if (loadError != null) {
-            showMessage(loadError);
-        }
+
+        if (!recordings.isEmpty() && !hasReport(recordings.get(0).getId())) {
+            logSymptoms(recordings.get(0).getId());
+        } else {
+            showPatientMenu();
+            if (loadError != null) {
+                showMessage(loadError);}}
         pingThread = new PingThread(patientClient, mainFrame);
         Thread thread = new Thread(pingThread);
         thread.setDaemon(true); //para que no impida cerrar la app
@@ -83,6 +91,12 @@ public class PatientGUI {
                 reports.addAll(history.getReports());
             }
             reports.sort(Comparator.comparing(SymptomReport::getDateTime,
+                    Comparator.nullsLast(Comparator.reverseOrder())));
+            recordings.clear();
+            if (history.getRecordings() != null) {
+                recordings.addAll(history.getRecordings());
+            }
+            recordings.sort(Comparator.comparing(Recording::getStartTime,
                     Comparator.nullsLast(Comparator.reverseOrder())));
             return null;
         } catch (PatientClient.ServerException e) {
@@ -127,31 +141,18 @@ public class PatientGUI {
         GUI.primaryButton(recordButton);
 
 
-        recordButton.setOnAction(e -> showMessage("ECG recording is not available yet."));
+        recordButton.setOnAction(e -> {
+            try {
+                bitalinoReacording();
+            } catch (PatientClient.ServerException | IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
         VBox ecgCard = new VBox(10, ecgTitle, ecgText, recordButton);
         GUI.card(ecgCard);
 
-
-        Label symptomsTitle = new Label("How do you feel today?");
-        GUI.title(symptomsTitle, 20);
-        Label symptomsText = new Label("Palpitations, dizziness, tiredness, chest pain");
-        GUI.muted(symptomsText);
-        symptomsText.setWrapText(true);
-        Region space = new Region();
-        VBox.setVgrow(space, Priority.ALWAYS);
-        Button symptomsButton = new Button("Log symptoms");
-        GUI.primaryButton(symptomsButton);
-
-        symptomsButton.setOnAction(e -> logSymptoms());
-        VBox symptomsCard = new VBox(10, symptomsTitle, symptomsText, space, symptomsButton);
-        GUI.card(symptomsCard);
-
-
-        ecgCard.setPrefWidth(500);
-        symptomsCard.setPrefWidth(500);
         HBox.setHgrow(ecgCard, Priority.ALWAYS);
-        HBox.setHgrow(symptomsCard, Priority.ALWAYS);
-        HBox cards = new HBox(16, ecgCard, symptomsCard);
+        HBox cards = new HBox(16, ecgCard);
 
         Label reportsTitle = new Label("My health reports");
         GUI.title(reportsTitle, 20);
@@ -177,13 +178,113 @@ public class PatientGUI {
         GUI.background(page, GUI.FONDO, 0);
         mainFrame.setScreen(page);
     }
-    /** Formulario de síntomas */
-    private void logSymptoms() {
-        Hyperlink backLink = new Hyperlink("← Back to menu");
-        GUI.link(backLink);
-        backLink.setOnAction(e -> showPatientMenu());
-        Label formTitle = new Label("How do you feel today?");
+    //falata todo lo del EMG
+    private void bitalinoReacording() throws PatientClient.ServerException, IOException {
+            Hyperlink backLink = new Hyperlink("< Back to menu");
+            GUI.link(backLink);
+            backLink.setOnAction(e -> {
+                stopRecording();
+                showPatientMenu();
+            });
+
+            Label title = new Label("Record your ECG");
+            GUI.title(title, 28);
+            TextField macField = new TextField();
+            macField.setPromptText("BITalino MAC (empty = test mode)");
+            GUI.input(macField);
+            Label status = new Label("Press Start and stay still");
+
+            Button startButton = new Button("Start");
+            GUI.primaryButton(startButton);
+            Button stopButton = new Button("Stop");
+            GUI.secondaryButton(stopButton);
+
+            startButton.setOnAction(e -> {
+                String mac = macField.getText().trim();
+                BitalinoRecorder recorder;
+                if (mac.isEmpty()) {
+                    recorder = new BitalinoRecorder();      //  prueba
+                } else {
+                    recorder = new BitalinoRecorder(mac);   // BITalino
+                }
+
+                try {
+                    session = patientClient.startECGRecording(recorder, 30, new RecordingSession.Listener() {
+                        @Override
+                        public void onBlock(int[] samples) {
+                            Platform.runLater(() ->
+                                    status.setText("Recording... " + (int) session.getRecorderSeconds() + " s"));
+                        }
+
+                        @Override
+                        public void onFinished(int totalSamples, Exception error) {
+                            Platform.runLater(() -> {
+                                if (totalSamples > 0) {
+
+                                    recordingFinished();
+                                } else if (error == null) {
+                                    status.setText("Recording finished and sent to your doctor.");
+                                } else {
+                                    status.setText("Error: " + error.getMessage());
+                                }
+                            });
+                        }
+                    });
+                } catch (Exception ex) {
+                    status.setText("Could not start: " + ex.getMessage());
+                }
+            });
+
+            stopButton.setOnAction(e -> stopRecording());
+
+            VBox card = new VBox(16, macField, status, new HBox(12, startButton, stopButton));
+            GUI.card(card);
+
+            VBox page = new VBox(20, backLink, title, card);
+            page.setPadding(new Insets(32, 40, 32, 40));
+            GUI.background(page, GUI.FONDO, 0);
+            mainFrame.setScreen(page);
+
+    }
+    private void stopRecording() {
+        if (session != null && session.isRunning()) {
+            session.stop();
+        }
+    }
+    /**
+     * Se llama cuando termina una grabación de ECG
+     * Abre el informe de síntomas
+     */
+    private void recordingFinished() {
+        String loadError = loadHistory();
+        if (recordings.isEmpty()) {
+            showPatientMenu();
+            showMessage(loadError != null ? loadError : "Recording saved.");
+            return;
+        }
+        Recording newRecording = recordings.get(0);
+        logSymptoms(newRecording.getId());
+    }
+
+    /** Dice si ya hay un informe de síntomas de esa grabación. */
+    private boolean hasReport(int recordingId) {
+        for (SymptomReport report : reports) {
+            if (report.getSessionId() != null && report.getSessionId() == recordingId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Formulario de síntomas de una sesión  */
+    private void logSymptoms(Integer sessionId) {
+        Label formTitle = new Label("How did you feel during the recording?");
         GUI.title(formTitle, 28);
+        formTitle.setWrapText(true);
+        Label formSubtitle = new Label("Your recording is saved. Answer this form to finish; it is required.");
+        GUI.subtitle(formSubtitle);
+        formSubtitle.setWrapText(true);
+        VBox titleBox = new VBox(12, new VBox(4, formTitle, formSubtitle), sessionBox(sessionId, recordings, null));
         ToggleGroup physicalGroup = new ToggleGroup();
         FlowPane physicalPills = pills(physicalGroup, "Excellent", "Good", "Fair", "Poor", "Terrible");
         VBox physicalSection = section("How do you feel physically today?", null, physicalPills);
@@ -209,12 +310,6 @@ public class PatientGUI {
         VBox notesSection = section("Additional notes", "Optional.", notesArea);
 
 
-        TextField minutesField = new TextField();
-        minutesField.setPromptText("e.g. 15");
-        GUI.input(minutesField);
-        minutesField.setMaxWidth(160);
-        VBox minutesSection = section("How long did the episode last?", "Optional. In minutes.", minutesField);
-
         Label formError = new Label();
         GUI.fieldError(formError);
         formError.setVisible(false);
@@ -233,7 +328,6 @@ public class PatientGUI {
             palpitations.setSelected(false);
             fatigue.setSelected(false);
             notesArea.clear();
-            minutesField.clear();
             formError.setVisible(false);
             formError.setManaged(false);
         });
@@ -249,23 +343,6 @@ public class PatientGUI {
                 formError.setVisible(true);
                 formError.setManaged(true);
                 return;
-            }
-
-            // Duración: vacía = 0; si no, tiene que ser un número entero >= 0
-            int episodeMinutes = 0;
-            String minutesText = minutesField.getText().trim();
-            if (!minutesText.isEmpty()) {
-                try {
-                    episodeMinutes = Integer.parseInt(minutesText);
-                } catch (NumberFormatException ex) {
-                    episodeMinutes = -1;
-                }
-                if (episodeMinutes < 0) {
-                    formError.setText(" duration must be a whole number ");
-                    formError.setVisible(true);
-                    formError.setManaged(true);
-                    return;
-                }
             }
 
             String physical = ((ToggleButton) physicalGroup.getSelectedToggle()).getText();
@@ -286,9 +363,10 @@ public class PatientGUI {
                     shortnessOfBreath.isSelected(),
                     chestPain.isSelected(),
                     fatigue.isSelected(),
-                    episodeMinutes,
+                    0,
                     comments.toString()
             );
+            report.setSessionId(sessionId);
 
 
             try {
@@ -307,7 +385,7 @@ public class PatientGUI {
 
 
             if (loadHistory() != null) {
-                reports.add(0, report);
+                reports.addFirst(report);
             }
             showPatientMenu();
             showMessage(String.format("Symptoms sent at %s.",
@@ -319,11 +397,11 @@ public class PatientGUI {
         HBox buttonBar = new HBox(12, clearButton, buttonSpacer, submitButton);
         buttonBar.setAlignment(Pos.CENTER_LEFT);
 
-        VBox card = new VBox(24, physicalSection, moodSection, symptomsSection, minutesSection, notesSection, formError, buttonBar);
+        VBox card = new VBox(24, physicalSection, moodSection, symptomsSection, notesSection, formError, buttonBar);
         GUI.card(card);
         card.setPadding(new Insets(28, 32, 28, 32));
 
-        VBox content = new VBox(20, backLink, card);
+        VBox content = new VBox(20, titleBox, card);
         content.setMaxWidth(720);
         content.setPadding(new Insets(28, 40, 32, 40));
 
@@ -367,13 +445,7 @@ public class PatientGUI {
             GUI.text(emptyTitle, 16, true, GUI.AZUL_NOCHE);
             Label emptyText = new Label("When you log your symptoms, they will show up here.");
             GUI.muted(emptyText);
-            Button logButton = new Button("Log symptoms");
-            GUI.primaryButton(logButton);
-            logButton.setPrefWidth(180);
-            logButton.setMaxWidth(Region.USE_PREF_SIZE);
-            logButton.setOnAction(e -> logSymptoms());
-            VBox empty = new VBox(8, emptyTitle, emptyText, logButton);
-            VBox.setMargin(logButton, new Insets(8, 0, 0, 0));
+            VBox empty = new VBox(8, emptyTitle, emptyText);
             empty.setAlignment(Pos.CENTER);
             GUI.card(empty);
             empty.setPadding(new Insets(40));
@@ -397,7 +469,6 @@ public class PatientGUI {
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scroll.setBorder(null);
         GUI.background(scroll, GUI.FONDO, 0);
-        // el fondo llega hasta abajo aunque haya poco contenido
         scroll.viewportBoundsProperty().addListener((obs, was, now) -> centered.setMinHeight(now.getHeight()));
         mainFrame.setScreen(scroll);
     }
@@ -423,9 +494,6 @@ public class PatientGUI {
         HBox state = new HBox(32,
                 infoPair("Physical", commentPart(report.getComments(), "Physical")),
                 infoPair("Mood", commentPart(report.getComments(), "Mood")));
-        if (report.getEpisodeMinutes() > 0) {
-            state.getChildren().add(infoPair("Duration", report.getEpisodeMinutes() + " min"));
-        }
 
 
         Label symptomsLabel = new Label("Symptoms");
@@ -443,7 +511,7 @@ public class PatientGUI {
         }
         VBox symptoms = new VBox(6, symptomsLabel, symptomChips);
 
-        VBox card = new VBox(16, top, state, symptoms);
+        VBox card = new VBox(16, top, state, symptoms, sessionBox(report.getSessionId(), recordings, null));
 
         String notes = commentPart(report.getComments(), "Notes");
         if (notes != null) {
@@ -475,6 +543,67 @@ public class PatientGUI {
         return card;
     }
 
+
+
+    /**
+     * Caja con la grabación de ECG a la que pertenece un informe.
+     */
+    static VBox sessionBox(Integer sessionId, List<Recording> recordings, Node action) {
+        Recording recording = findRecording(recordings, sessionId);
+        String date = null;
+        if (recording != null) {
+            date = recording.getStartTime().format(REPORT_DATE);}
+
+        HBox data = new HBox(28,
+                infoPair("Recording", recordingNumber(recordings, sessionId)),
+                infoPair("Recorded", date),
+                infoPair("Episode duration", recordingLength(recording)));
+        data.setAlignment(Pos.CENTER_LEFT);
+        if (action != null) {
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            data.getChildren().addAll(spacer, action);}
+        Label title = new Label("Linked ECG recording");
+        GUI.text(title, 12, true, GUI.INDIGO);
+        VBox box = new VBox(8, title, data);
+        GUI.background(box, GUI.LAVANDA, 12);
+        box.setPadding(new Insets(12, 14, 12, 14));
+        return box;}
+
+    /**
+     * Número de una  grabacion
+     */
+    static String recordingNumber(List<Recording> recordings, Integer id) {
+        Recording target = findRecording(recordings, id);
+        if (target == null || target.getStartTime() == null) {
+            return null;
+        }
+        int number = 1;
+        for (Recording recording : recordings) {
+            if (recording.getStartTime() != null && recording.getStartTime().isBefore(target.getStartTime())) {
+                number++;}}return "#" + number;}
+
+    /** Busca la grabacion con ese id */
+    static Recording findRecording(List<Recording> recordings, Integer id) {
+        if (id == null) {
+            return null;
+        }
+        for (Recording recording : recordings) {
+            if (id.equals(recording.getId())) {
+                return recording;
+            }
+        }
+        return null;
+    }
+
+    /**duracion una grabacion */
+    static String recordingLength(Recording recording) {
+        if (recording == null || recording.getStartTime() == null || recording.getEndTime() == null) {
+            return null;}
+        long seconds = Duration.between(recording.getStartTime(), recording.getEndTime()).getSeconds();
+        if (seconds < 60) {
+            return seconds + " s";}return (seconds / 60) + " min " + (seconds % 60) + " s";
+    }
 
     static VBox infoPair(String name, String value) {
         Label nameLabel = new Label(name);
