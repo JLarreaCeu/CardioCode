@@ -165,9 +165,7 @@ public class AdminConsole implements Runnable {
                             System.out.println("Wrong password. Shutdown cancelled");
                         } else {
                             int connected = server.getConnectedClients();
-                            if(connected > 0){
-                                System.out.println("Warning: there are " +connected + "clientes connected. They will be disconnected");
-                            }
+                            System.out.println("Warning: there are " +connected + "clientes connected. They will be disconnected");
                             if (doubleCheck("SHUTDOWN")) {
                                 server.shutdown();
                                 active = false;
