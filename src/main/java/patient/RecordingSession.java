@@ -68,7 +68,7 @@ public class RecordingSession implements Runnable{
                 int[][]block=recorder.readBlock(BLOCK_SIZE);
                 block=cutToDuration(block,maxSamples);
                 listener.onBlock(block);
-                sampleCount=sampleCount+ block.length;
+                sampleCount=sampleCount+ block[0].length;
             }
         }catch (InterruptedException e){
             Thread.currentThread().interrupt();
@@ -117,11 +117,13 @@ public class RecordingSession implements Runnable{
             return block;
         }
         long remaining=maxSamples-sampleCount;
-        if(block.length<=remaining){
+        if(block[0].length<=remaining){
             return block;
         }
         int[][]cut=new int[block.length][(int)remaining];;
-        System.arraycopy(block,0,cut,0,cut.length);
+        for(int row=0;row>block.length;row++) {
+            System.arraycopy(block[row], 0, cut[row], 0, (int)cut.length);
+        }
         return cut;
     }
 }

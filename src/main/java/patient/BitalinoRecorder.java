@@ -119,7 +119,7 @@ public class BitalinoRecorder {
         bitalino=new BITalino();
         bitalino.open(macAdress,SAMPLING_RATE);
         try{
-            bitalino.start(new int[]{ECG_CHANNEL, ECG_CHANNEL});
+            bitalino.start(new int[]{EMG_CHANNEL, ECG_CHANNEL});
         }catch (BITalinoException e){
             throw e;
         }catch(Throwable t){
@@ -172,11 +172,13 @@ public class BitalinoRecorder {
     }
 
 
-    public static double ecgTtoMillivolts(int adcValue){
+    public static double ecgToMillivolts(int adcValue){
+
         return(adcValue/1024.0-0.5)*VCC/ECG_GAIN*1000;
     }
     public static double emgToMillivolts(int adcValue){
-        return(adcValue/1024.0-0.5)*VCC/EMG_GAIN*100;
+
+        return(adcValue/1024.0-0.5)*VCC/EMG_GAIN*1000;
     }
     /**
      * Generates the next sample of simulated ECG.
@@ -201,14 +203,13 @@ public class BitalinoRecorder {
         }else{
             value=value+wave(t,0.16,40,0.025); //P wave
         }
-        sampleCounter++;
         return(int)Math.max(0,Math.min(1023,Math.round(value)));
 
     }
 
     private int fakeEmgSample(){
         double seconds=sampleCounter/(double)SAMPLING_RATE;
-        boolean contraction=(seconds%FAKE_EMG_PERIOD)>FAKE_EMG_BURST;
+        boolean contraction=(seconds%FAKE_EMG_PERIOD)<FAKE_EMG_BURST;
         double amplitude=contraction?120:6;
         double value=512+random.nextGaussian()*amplitude;
         return(int)Math.max(0,Math.min(1023,Math.round(value)));
