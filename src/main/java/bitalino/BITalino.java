@@ -271,7 +271,7 @@ public Frame[] read(int nSamples)throws BITalinoException{
             }return frames;
 
         } catch (Exception e) {
-            throw new BITalinoException(BITalinoErrorTypes.DIGITAL_CHANNELS_NOT_VALID);
+            throw new BITalinoException(BITalinoErrorTypes.LOST_COMMUNICATION);
         }
 }
 
