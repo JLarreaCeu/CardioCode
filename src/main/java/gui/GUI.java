@@ -31,9 +31,13 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import javafx.util.converter.LocalDateStringConverter;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.List;
 import java.util.Random;
 
@@ -234,6 +238,7 @@ public class GUI {
             GUI.selectInput(birthDatePicker);
             birthDateError = makeErrorLabel();
             birthDatePicker.valueProperty().addListener((obs, was, now) -> show(birthDateError, false));
+            birthDatePicker.getEditor().textProperty().addListener((obs, was, now) -> show(birthDateError, false));
 
             sexBox = new ComboBox<>();
             sexBox.getItems().addAll("Female", "Male");
@@ -358,10 +363,17 @@ public class GUI {
             String name = newNameField.getText().trim();
             String surname = newSurnameField.getText().trim();
             String phone = newPhoneField.getText().trim();
-            LocalDate birthDate = birthDatePicker.getValue();
             Doctor doctor = doctorBox.getValue();
             String confirm = confirmField.getText();
             boolean ok = true;
+            LocalDate birthDate = null;
+            try {
+                birthDate = GUI.readDate(birthDatePicker);
+            } catch (DateTimeParseException e) {
+                birthDateError.setText("Write the date dd/mm/yyyy");
+                show(birthDateError, true);
+                ok = false;
+            }
 
             if (name.isEmpty()) {
                 showError(newNameField, newNameError, "Enter your name.");
@@ -652,8 +664,29 @@ public class GUI {
         control.setMaxWidth(Double.MAX_VALUE);
         control.setStyle("-fx-font-size: 14px;");
         if (control instanceof DatePicker) {
-            background(((DatePicker) control).getEditor(), Color.TRANSPARENT, 10);
+            DatePicker picker = (DatePicker) control;
+            background(picker.getEditor(), Color.TRANSPARENT, 10);
+            // Las fechas siempre se ven y se escriben como 03/05/1990
+            picker.setConverter(new LocalDateStringConverter(DATE_FORMAT, DATE_FORMAT));
         }
+    }
+
+    /** Formato de las fechas: día/mes/año. Acepta 03/05/1990 y 3/5/1990. STRICT rechaza fechas que no existen, como 31/02. */
+    public static final DateTimeFormatter DATE_FORMAT =
+            DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
+
+    /**
+     * Lee la fecha de un DatePicker. Lee el texto escrito, porque si la fecha se escribe
+     * a mano y no se pulsa Enter, getValue() devuelve null.
+     * @return la fecha, o null si el campo está vacío
+     * @throws DateTimeParseException si lo escrito no es una fecha válida
+     */
+    public static LocalDate readDate(DatePicker picker) {
+        String text = picker.getEditor().getText().trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        return LocalDate.parse(text, DATE_FORMAT);
     }
 
     /** Borde rojo si el campo tiene un error*/

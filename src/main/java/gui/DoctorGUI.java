@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.Period;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -495,7 +496,16 @@ public class DoctorGUI {
         saveButton.setOnAction(e -> {
             String name = nameField.getText().trim();
             String surname = surnameField.getText().trim();
-            LocalDate birthDate = birthPicker.getValue();
+
+            // La fecha se lee del texto escrito (si se escribe a mano, getValue() puede ser null)
+            LocalDate birthDate;
+            try {
+                birthDate = GUI.readDate(birthPicker);
+            } catch (DateTimeParseException ex) {
+                showFieldError(formError, "Write the date of birth as dd/mm/yyyy, e.g. 03/05/1990.");
+                return;
+            }
+
             if (name.isEmpty() || surname.isEmpty()) {
                 showFieldError(formError, "Name and surname are required.");
                 return;
