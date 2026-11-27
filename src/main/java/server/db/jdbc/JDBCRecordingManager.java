@@ -58,6 +58,27 @@ public class JDBCRecordingManager implements RecordingManager {
     }
 
     @Override
+    public void setFilePath(Integer recordingId, String filePath) {
+        if (recordingId == null) {
+            throw new IllegalArgumentException("Recording id is required");
+        }
+        if (filePath == null || filePath.isBlank()) {
+            throw new IllegalArgumentException("File path is required");
+        }
+        String sql = "UPDATE recordings SET file_path = ? WHERE id = ?";
+        try (Connection c = JDBCManager.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, filePath);
+            ps.setInt(2, recordingId);
+            if (ps.executeUpdate() == 0) {
+                throw new IllegalArgumentException("Recording not found: " + recordingId);
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Could not save the file path", e);
+        }
+    }
+
+    @Override
     public void setEndTime(Integer recordingId, LocalDateTime endTime) {
         if (recordingId == null) {
             throw new IllegalArgumentException("Recording id is required");

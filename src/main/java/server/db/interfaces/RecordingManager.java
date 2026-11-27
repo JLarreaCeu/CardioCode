@@ -14,6 +14,9 @@ public interface RecordingManager {
     /** Guarda una grabación al empezar (START_RECORDING) y le asigna el id de sesión. */
     void addRecording(Recording recording);
 
+    /** Guarda la ruta del fichero de muestras (se crea después de tener el id de sesión). */
+    void setFilePath(Integer recordingId, String filePath);
+
     /** Guarda la hora a la que termina la grabación (STOP_RECORDING). */
     void setEndTime(Integer recordingId, LocalDateTime endTime);
 

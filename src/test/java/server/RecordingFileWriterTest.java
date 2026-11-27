@@ -9,8 +9,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -18,10 +20,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * Pruebas de RecordingFileWriter: abrir el fichero de una grabación, escribir bloques
  * de muestras (fila 0 = EMG, fila 1 = ECG), cerrarlo y volver a leerlo con readAll.
  *
+ * Formato del fichero: líneas de metadatos que empiezan por # (paciente, sesión, hora de inicio,
+ * frecuencia, canales, unidades), la cabecera "time_s,EMG_adc,ECG_adc" y una línea por muestra.
+ *
  * RecordingFileWriter siempre escribe en la carpeta "recordings/" del directorio de trabajo,
  * así que cada test borra los ficheros que crea al terminar.
  */
 public class RecordingFileWriterTest {
+
+    private static final int RATE = 1000;
+    private static final String HEADER = RecordingFileWriter.HEADER;
 
     private final List<RecordingFileWriter> writers = new ArrayList<>();
     private final List<Path> createdFiles = new ArrayList<>();
@@ -38,9 +46,24 @@ public class RecordingFileWriterTest {
 
     /** Abre un fichero con un nombre único para que no choque con grabaciones reales. */
     private String open(RecordingFileWriter writer, String name) throws IOException {
-        String path = writer.open(name, "JUnitTest" + System.nanoTime());
+        return open(writer, name, RATE);
+    }
+
+    private String open(RecordingFileWriter writer, String name, int rate) throws IOException {
+        String path = writer.open(1, 1, name, "JUnitTest" + System.nanoTime(), LocalDateTime.now(), rate);
         createdFiles.add(Paths.get(path));
         return path;
+    }
+
+    /** Líneas del fichero sin los metadatos (#): la cabecera de columnas y las muestras. */
+    private static List<String> dataLines(String path) throws IOException {
+        List<String> data = new ArrayList<>();
+        for (String line : Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8)) {
+            if (!line.startsWith(RecordingFileWriter.COMMENT)) {
+                data.add(line);
+            }
+        }
+        return data;
     }
 
     @AfterEach
@@ -56,7 +79,7 @@ public class RecordingFileWriterTest {
     // ---------- open ----------
 
     @Test
-    void openCreatesFileWithOnlyTheHeader() throws IOException {
+    void openCreatesFileWithMetadataAndColumnHeader() throws IOException {
         RecordingFileWriter writer = newWriter();
         assertFalse(writer.isOpen());
         assertNull(writer.getFilePath());
@@ -68,29 +91,49 @@ public class RecordingFileWriterTest {
         Path file = Paths.get(path);
         assertTrue(Files.exists(file));
         assertEquals(Paths.get("recordings"), file.getParent());
-        assertEquals(List.of("EMG_adc,ECG_adc"), Files.readAllLines(file, StandardCharsets.UTF_8));
+        assertEquals(List.of(HEADER), dataLines(path));
     }
 
     @Test
-    void fileNameHasCleanNameSurnameAndDate() throws IOException {
+    void metadataHasIdsStartTimeRateChannelsAndUnits() throws IOException {
         RecordingFileWriter writer = newWriter();
-        String path = writer.open("  María José ", "Cuevas Alonso");
+        LocalDateTime start = LocalDateTime.of(2026, 11, 27, 10, 15, 2);
+        String path = writer.open(7, 42, "Ana", "JUnitTest" + System.nanoTime(), start, RATE);
+        createdFiles.add(Paths.get(path));
+
+        List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
+        assertTrue(lines.contains("# patient_id=7"));
+        assertTrue(lines.contains("# session_id=42"));
+        assertTrue(lines.contains("# start_time=2026-11-27T10:15:02"));
+        assertTrue(lines.contains("# sampling_rate_hz=1000"));
+        assertTrue(lines.contains("# channels=EMG:A1,ECG:A2"));
+        assertTrue(lines.stream().anyMatch(l -> l.startsWith("# units=") && l.contains("time_s:s") && l.contains("ADC")));
+        assertTrue(lines.stream().anyMatch(l -> l.startsWith("# time_reference=")));
+        // Los metadatos van antes de la cabecera de columnas
+        assertEquals(HEADER, lines.get(lines.size() - 1));
+    }
+
+    @Test
+    void fileNameHasPatientAndSessionIdsCleanNameSurnameAndDate() throws IOException {
+        RecordingFileWriter writer = newWriter();
+        String surname = "Cuevas Alonso " + System.nanoTime();
+        String path = writer.open(7, 42, "  María José ", surname, LocalDateTime.of(2026, 11, 22, 19, 12, 5), RATE);
         createdFiles.add(Paths.get(path));
 
         String fileName = Paths.get(path).getFileName().toString();
-        // Sin tildes, espacios cambiados por guiones y fecha yyyy-MM-dd_HH-mm-ss
-        assertTrue(fileName.matches("Maria-Jose_Cuevas-Alonso_\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2}\\.txt"),
+        // Sin tildes, espacios cambiados por guiones y la fecha de inicio de la sesión
+        assertTrue(fileName.matches("P7_S42_Maria-Jose_Cuevas-Alonso-\\d+_2026-11-22_19-12-05\\.txt"),
                 "Unexpected file name: " + fileName);
     }
 
     @Test
     void nullOrSymbolOnlyNamesBecomeUnknown() throws IOException {
         RecordingFileWriter writer = newWriter();
-        String path = writer.open(null, "@@@");
+        String path = writer.open(3, 9, null, "@@@", LocalDateTime.now(), RATE);
         createdFiles.add(Paths.get(path));
 
         String fileName = Paths.get(path).getFileName().toString();
-        assertTrue(fileName.startsWith("unknown_unknown_"), "Unexpected file name: " + fileName);
+        assertTrue(fileName.startsWith("P3_S9_unknown_unknown_"), "Unexpected file name: " + fileName);
     }
 
     @Test
@@ -98,7 +141,17 @@ public class RecordingFileWriterTest {
         RecordingFileWriter writer = newWriter();
         open(writer, "Ana");
 
-        assertThrows(IllegalStateException.class, () -> writer.open("Ana", "Other"));
+        assertThrows(IllegalStateException.class,
+                () -> writer.open(1, 2, "Ana", "Other", LocalDateTime.now(), RATE));
+    }
+
+    @Test
+    void zeroOrNegativeSamplingRateIsRejected() {
+        RecordingFileWriter writer = newWriter();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> writer.open(1, 1, "Ana", "Rate", LocalDateTime.now(), 0));
+        assertFalse(writer.isOpen());
     }
 
     // ---------- writeBlock ----------
@@ -112,15 +165,43 @@ public class RecordingFileWriterTest {
     }
 
     @Test
-    void writeBlockWritesOneLineEmgCommaEcgPerSample() throws IOException {
+    void writeBlockWritesOneLineTimeEmgEcgPerSample() throws IOException {
         RecordingFileWriter writer = newWriter();
         String path = open(writer, "Luis");
 
         writer.writeBlock(new int[][]{{10, 20, 30}, {500, 510, 520}});
         writer.close();
 
-        List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
-        assertEquals(List.of("EMG_adc,ECG_adc", "10,500", "20,510", "30,520"), lines);
+        assertEquals(List.of(HEADER, "0.000,10,500", "0.001,20,510", "0.002,30,520"), dataLines(path));
+    }
+
+    @Test
+    void timeContinuesAcrossBlocksAndUsesTheSamplingRate() throws IOException {
+        RecordingFileWriter writer = newWriter();
+        String path = open(writer, "Tiempo", 100);   // 100 Hz -> una muestra cada 0.01 s
+
+        writer.writeBlock(new int[][]{{1, 2}, {101, 102}});
+        writer.writeBlock(new int[][]{{3}, {103}});
+        writer.close();
+
+        assertEquals(List.of(HEADER, "0.000,1,101", "0.010,2,102", "0.020,3,103"), dataLines(path));
+    }
+
+    @Test
+    void timeUsesADecimalPointEvenWithASpanishLocale() throws IOException {
+        // En español el decimal es una coma y rompería las columnas del CSV
+        Locale previous = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("es-ES"));
+        try {
+            RecordingFileWriter writer = newWriter();
+            String path = open(writer, "Locale");
+            writer.writeBlock(new int[][]{{1, 2}, {101, 102}});
+            writer.close();
+
+            assertEquals(List.of(HEADER, "0.000,1,101", "0.001,2,102"), dataLines(path));
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 
     @Test
@@ -145,7 +226,7 @@ public class RecordingFileWriterTest {
 
         writer.writeBlock(new int[][]{{7}, {700}});
 
-        assertEquals(List.of("EMG_adc,ECG_adc", "7,700"), Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8));
+        assertEquals(List.of(HEADER, "0.000,7,700"), dataLines(path));
     }
 
     @Test
@@ -170,7 +251,7 @@ public class RecordingFileWriterTest {
         writer.writeBlock(new int[][]{{1, 2, 3}});
         writer.close();
 
-        assertEquals(List.of("EMG_adc,ECG_adc"), Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8));
+        assertEquals(List.of(HEADER), dataLines(path));
     }
 
     // ---------- close ----------
@@ -185,6 +266,20 @@ public class RecordingFileWriterTest {
 
         open(writer, "Dos");
         assertTrue(writer.isOpen());
+    }
+
+    @Test
+    void newFileStartsTheTimeAtZeroAgain() throws IOException {
+        RecordingFileWriter writer = newWriter();
+        open(writer, "Primera");
+        writer.writeBlock(new int[][]{{1, 2}, {101, 102}});
+        writer.close();
+
+        String second = open(writer, "Segunda");
+        writer.writeBlock(new int[][]{{3}, {103}});
+        writer.close();
+
+        assertEquals(List.of(HEADER, "0.000,3,103"), dataLines(second));
     }
 
     @Test
@@ -208,6 +303,18 @@ public class RecordingFileWriterTest {
         assertEquals(2, samples.length);
         assertEquals(0, samples[0].length);
         assertEquals(0, samples[1].length);
+    }
+
+    @Test
+    void readAllSkipsMetadataAndIgnoresTheTimeColumn() throws IOException {
+        // Los metadatos dicen ECG y EMG, pero empiezan por # y no se toman como cabecera
+        Path file = tempDir.resolve("with_metadata.txt");
+        Files.writeString(file, "# channels=ECG:A2,EMG:A1\n# units=ECG_adc:ADC\ntime_s,EMG_adc,ECG_adc\n"
+                + "0.000,1,100\n0.001,2,200\n");
+
+        int[][] samples = RecordingFileWriter.readAll(file.toString());
+        assertArrayEquals(new int[]{1, 2}, samples[RecordingFileWriter.EMG_ROW]);
+        assertArrayEquals(new int[]{100, 200}, samples[RecordingFileWriter.ECG_ROW]);
     }
 
     @Test

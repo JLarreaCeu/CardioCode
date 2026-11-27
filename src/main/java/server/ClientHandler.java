@@ -481,12 +481,24 @@ public class ClientHandler implements Runnable {
             return;
         }
 
+        // Primero se guarda la sesión para tener su id, y después se crea el fichero
+        // con el id del paciente y de la sesión en el nombre y en la cabecera
         Recording recording = new Recording(patient.getId(), LocalDateTime.now(), SAMPLING_RATE, CHANNEL, UNITS);
         try {
-            recording.setFilePath(recordingFile.open(patient.getName(), patient.getSurname()));
             recordingManager.addRecording(recording);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Could not start recording: " + e.getMessage());
+            sendError("Could not start the recording");
+            return;
+        }
+        try {
+            String path = recordingFile.open(patient.getId(), recording.getId(), patient.getName(),
+                    patient.getSurname(), recording.getStartTime(), SAMPLING_RATE);
+            recordingManager.setFilePath(recording.getId(), path);
+            recording.setFilePath(path);
         } catch (IOException | IllegalArgumentException | IllegalStateException e) {
             recordingFile.close();
+            closeFailedSession(recording.getId());
             System.out.println("Could not start recording: " + e.getMessage());
             sendError("Could not start the recording");
             return;
@@ -494,6 +506,15 @@ public class ClientHandler implements Runnable {
         recordingId = recording.getId();
         connection.sendCommand(Commands.OK);
         System.out.println("Recording " + recordingId + " started for patient " + patient.getId());
+    }
+
+    /** Si no se pudo crear el fichero, la sesión ya guardada se cierra para que no quede abierta. */
+    private void closeFailedSession(Integer id) {
+        try {
+            recordingManager.setEndTime(id, LocalDateTime.now());
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            System.out.println("Could not close the failed recording " + id + ": " + e.getMessage());
+        }
     }
 
     private void handleSignalData() throws IOException, ClassNotFoundException {
