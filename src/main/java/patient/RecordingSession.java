@@ -120,9 +120,11 @@ public class RecordingSession implements Runnable{
         if(block[0].length<=remaining){
             return block;
         }
-        int[][]cut=new int[block.length][(int)remaining];;
-        for(int row=0;row>block.length;row++) {
-            System.arraycopy(block[row], 0, cut[row], 0, (int)cut.length);
+
+        int n=(int) remaining;
+        int[][]cut=new int[block.length][n];
+        for(int row=0;row<block.length;row++) {
+            System.arraycopy(block[row], 0, cut[row], 0, n);
         }
         return cut;
     }
