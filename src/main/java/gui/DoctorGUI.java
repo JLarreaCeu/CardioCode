@@ -336,6 +336,13 @@ public class DoctorGUI {
         VBox card = new VBox(16, top, state, new VBox(6, symptomsLabel, chips),
                 PatientGUI.sessionBox(report.getSessionId(), recordings, viewEcg));
 
+        String recordingState = PatientGUI.commentPart(report.getComments(), "Recording");
+        if (recordingState != null) {
+            Label interruptedLabel = new Label("Recording: " + recordingState);
+            GUI.fieldError(interruptedLabel);
+            card.getChildren().add(1, interruptedLabel);
+        }
+
         String notes = PatientGUI.commentPart(report.getComments(), "Notes");
         if (notes != null) {
             Label notesLabel = new Label("Patient's notes");

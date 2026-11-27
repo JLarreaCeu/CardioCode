@@ -68,7 +68,7 @@ public class PatientGUI {
         String loadError = loadHistory();
 
         if (!recordings.isEmpty() && !hasReport(recordings.get(0).getId())) {
-            logSymptoms(recordings.get(0).getId());
+            logSymptoms(recordings.get(0).getId(), false);
         } else {
             showPatientMenu();
             if (loadError != null) {
@@ -219,10 +219,10 @@ public class PatientGUI {
                         @Override
                         public void onFinished(int totalSamples, Exception error) {
                             Platform.runLater(() -> {
-                                if (error != null) {
-                                    status.setText("Error: " + error.getMessage() + ". The recording was stopped and the data received so far was saved.");
-                                } else if (totalSamples > 0) {
-                                    recordingFinished();
+                                if (totalSamples > 0) {
+                                    recordingFinished(error != null);
+                                } else if (error != null) {
+                                    status.setText("Error: " + error.getMessage());
                                 } else {
                                     status.setText("Recording finished and sent to your doctor.");
                                 }
@@ -254,7 +254,7 @@ public class PatientGUI {
      * Se llama cuando termina una grabación de ECG
      * Abre el informe de síntomas
      */
-    private void recordingFinished() {
+    private void recordingFinished(boolean interrupted) {
         String loadError = loadHistory();
         if (recordings.isEmpty()) {
             showPatientMenu();
@@ -262,7 +262,7 @@ public class PatientGUI {
             return;
         }
         Recording newRecording = recordings.get(0);
-        logSymptoms(newRecording.getId());
+        logSymptoms(newRecording.getId(), interrupted);
     }
 
     /** Dice si ya hay un informe de síntomas de esa grabación. */
@@ -276,7 +276,7 @@ public class PatientGUI {
     }
 
     /** Formulario de síntomas de una sesión  */
-    private void logSymptoms(Integer sessionId) {
+    private void logSymptoms(Integer sessionId, boolean interrupted) {
         Label formTitle = new Label("How did you feel during the recording?");
         GUI.title(formTitle, 28);
         formTitle.setWrapText(true);
@@ -284,6 +284,11 @@ public class PatientGUI {
         GUI.subtitle(formSubtitle);
         formSubtitle.setWrapText(true);
         VBox titleBox = new VBox(12, new VBox(4, formTitle, formSubtitle), sessionBox(sessionId, recordings, null));
+        if (interrupted) {
+            Label interruptedLabel = new Label("Error in the recording: the BITalino disconnected. The part recorded before the error was saved.");
+            GUI.fieldError(interruptedLabel);
+            titleBox.getChildren().add(1, interruptedLabel);
+        }
         ToggleGroup physicalGroup = new ToggleGroup();
         FlowPane physicalPills = pills(physicalGroup, "Excellent", "Good", "Fair", "Poor", "Terrible");
         VBox physicalSection = section("How do you feel physically today?", null, physicalPills);
@@ -352,6 +357,9 @@ public class PatientGUI {
             String notes = notesArea.getText().trim();
             if (!notes.isEmpty()) {
                 comments.append(" | Notes: ").append(notes);
+            }
+            if (interrupted) {
+                comments.append(" | Recording: Interrupted, the BITalino disconnected");
             }
 
             SymptomReport report = new SymptomReport(
