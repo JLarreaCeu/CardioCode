@@ -219,13 +219,12 @@ public class PatientGUI {
                         @Override
                         public void onFinished(int totalSamples, Exception error) {
                             Platform.runLater(() -> {
-                                if (totalSamples > 0) {
-
+                                if (error != null) {
+                                    status.setText("Error: " + error.getMessage() + ". The recording was stopped and the data received so far was saved.");
+                                } else if (totalSamples > 0) {
                                     recordingFinished();
-                                } else if (error == null) {
-                                    status.setText("Recording finished and sent to your doctor.");
                                 } else {
-                                    status.setText("Error: " + error.getMessage());
+                                    status.setText("Recording finished and sent to your doctor.");
                                 }
                             });
                         }
