@@ -196,7 +196,7 @@ public class BITalino {
             for (int bytes = 0; bytes < number_bytes; bytes++) {
                 for (int bit = 7; bit > -1; bit--) {
                     inp = (buffer[bytes]) >> bit & 0x01;
-                    if (bytes == (number_bytes - 1) && bit > 4) {
+                    if (bytes == (number_bytes - 1) && bit < 4) {
                         inp = 0;
                     }
                     out = x3;
