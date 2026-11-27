@@ -3,7 +3,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 
 /**
- * Test: connects bitalino and shows 100 ECG samples
+ * Test: connects bitalino and shows 1000 ECG samples
  */
 public class BitalinoTest {
     public static void main(String[]args){
@@ -15,7 +15,7 @@ public class BitalinoTest {
             if(mac==null){
                 return;
             }
-            bitalino.open(mac.trim(),100); //100 samples per second
+            bitalino.open(mac.trim(),1000); //1000 samples per second
             System.out.print("Connected");
 
             int[]channels={0,1}; //A1: EMG, A2: ECG
