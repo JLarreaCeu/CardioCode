@@ -287,7 +287,26 @@ public class DoctorGUI {
             for (SymptomReport report : reports) {
                 reportsBox.getChildren().add(reportCard(report, patientId, recordings));
             }}
-        mainFrame.setScreen(scrollPage(new VBox(20, backLink, titleBox, personalCard, reportsBox)));
+
+
+        VBox recordingsBox = new VBox(12, sectionTitle("Recordings (" + recordings.size() + ")"));
+        if (recordings.isEmpty()) {
+            recordingsBox.getChildren().add(emptyCard("This patient has not made any recordings yet."));
+        }
+        for (Recording recording : recordings) {
+            recordingsBox.getChildren().add(PatientGUI.sessionBox(recording.getId(), recordings,
+                    viewEcgButton(recording, patientId)));
+        }
+
+        mainFrame.setScreen(scrollPage(new VBox(20, backLink, titleBox, personalCard, reportsBox, recordingsBox)));
+    }
+
+    /** Botón que abre la gráfica de una grabación */
+    private Button viewEcgButton(Recording recording, Integer patientId) {
+        Button button = new Button("View ECG");
+        GUI.secondaryButton(button);
+        button.setOnAction(e -> showRecording(recording, patientId));
+        return button;
     }
 
     /** Tarjeta de un informe con el comentario  */
@@ -422,17 +441,27 @@ public class DoctorGUI {
         Label secondsLabel = new Label(seconds + " seconds");
         GUI.muted(secondsLabel);
 
-        Label ecgLabel = new Label("ECG (A2)");
+        // Datos de la grabación: frecuencia, canales y unidades
+        Label infoLabel = new Label(recording.getSamplingRate() + " Hz   ·   Channels: "
+                + recording.getChannel() + "   ·   Units: ADC (0-1023)");
+        GUI.muted(infoLabel);
+
+        // Escala de la gráfica en mV: de 0 ADC (abajo) a 1023 ADC (arriba)
+        Label ecgLabel = new Label("ECG (" + BitalinoRecorder.ECG_CHANNEL_NAME + ")   ·   scale: "
+                + String.format(Locale.ENGLISH, "%.2f to %.2f mV",
+                        BitalinoRecorder.ecgToMillivolts(0), BitalinoRecorder.ecgToMillivolts(1023)));
         GUI.fieldLabel(ecgLabel);
         Canvas ecgCanvas = new Canvas(1600, 320);
         drawSignal(ecgCanvas, ecg);
 
-        Label emgLabel = new Label("EMG (A1)");
+        Label emgLabel = new Label("EMG (" + BitalinoRecorder.EMG_CHANNEL_NAME + ")   ·   scale: "
+                + String.format(Locale.ENGLISH, "%.2f to %.2f mV",
+                        BitalinoRecorder.emgToMillivolts(0), BitalinoRecorder.emgToMillivolts(1023)));
         GUI.fieldLabel(emgLabel);
         Canvas emgCanvas = new Canvas(1600, 320);
         drawSignal(emgCanvas, emg);
 
-        VBox card = new VBox(14, ecgLabel, ecgCanvas, emgLabel, emgCanvas, secondsLabel);
+        VBox card = new VBox(14, infoLabel, ecgLabel, ecgCanvas, emgLabel, emgCanvas, secondsLabel);
         GUI.card(card);
         VBox content = new VBox(20, backLink, title, card);
         ScrollPane page = scrollPage(content);
