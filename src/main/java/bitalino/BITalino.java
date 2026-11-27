@@ -255,10 +255,10 @@ public Frame[] read(int nSamples)throws BITalinoException{
                 if (f[0].seq==-1){
                     while (f[0].seq==-1) {
                         iStream.readFully(bTemp,0,1);
-                        for(int j=number_bytes-2;j>=0;j--){
-                            buffer[j+1]=buffer[j];
+                        for(int j=0;j<number_bytes-1;j++){
+                            buffer[j]=buffer[j+1];
                         }
-                        buffer[0]=bTemp[0];
+                        buffer[number_bytes-1]=bTemp[0];
                         f=decode(buffer);
                     }
                     frames[i]=f[0];
