@@ -56,7 +56,7 @@ public class RecordingFileWriterTest {
     // ---------- open ----------
 
     @Test
-    void openCreatesEmptyFileInRecordingsFolder() throws IOException {
+    void openCreatesFileWithOnlyTheHeader() throws IOException {
         RecordingFileWriter writer = newWriter();
         assertFalse(writer.isOpen());
         assertNull(writer.getFilePath());
@@ -68,7 +68,7 @@ public class RecordingFileWriterTest {
         Path file = Paths.get(path);
         assertTrue(Files.exists(file));
         assertEquals(Paths.get("recordings"), file.getParent());
-        assertEquals(0, Files.size(file));
+        assertEquals(List.of("EMG_adc,ECG_adc"), Files.readAllLines(file, StandardCharsets.UTF_8));
     }
 
     @Test
@@ -120,7 +120,7 @@ public class RecordingFileWriterTest {
         writer.close();
 
         List<String> lines = Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8);
-        assertEquals(List.of("10,500", "20,510", "30,520"), lines);
+        assertEquals(List.of("EMG_adc,ECG_adc", "10,500", "20,510", "30,520"), lines);
     }
 
     @Test
@@ -145,7 +145,7 @@ public class RecordingFileWriterTest {
 
         writer.writeBlock(new int[][]{{7}, {700}});
 
-        assertEquals(List.of("7,700"), Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8));
+        assertEquals(List.of("EMG_adc,ECG_adc", "7,700"), Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8));
     }
 
     @Test
@@ -170,7 +170,7 @@ public class RecordingFileWriterTest {
         writer.writeBlock(new int[][]{{1, 2, 3}});
         writer.close();
 
-        assertEquals(0, Files.size(Paths.get(path)));
+        assertEquals(List.of("EMG_adc,ECG_adc"), Files.readAllLines(Paths.get(path), StandardCharsets.UTF_8));
     }
 
     // ---------- close ----------
@@ -218,6 +218,39 @@ public class RecordingFileWriterTest {
         int[][] samples = RecordingFileWriter.readAll(file.toString());
         assertArrayEquals(new int[]{1, 2, 3}, samples[0]);
         assertArrayEquals(new int[]{100, 200, 300}, samples[1]);
+    }
+
+    @Test
+    void readAllReturnsEmgAndEcgInTheirRows() throws IOException {
+        RecordingFileWriter writer = newWriter();
+        String path = open(writer, "Filas");
+        writer.writeBlock(new int[][]{{11, 12}, {511, 512}});
+        writer.close();
+
+        int[][] samples = RecordingFileWriter.readAll(path);
+        assertArrayEquals(new int[]{11, 12}, samples[RecordingFileWriter.EMG_ROW]);
+        assertArrayEquals(new int[]{511, 512}, samples[RecordingFileWriter.ECG_ROW]);
+    }
+
+    @Test
+    void readAllUsesTheHeaderToKnowWhichColumnIsEachSignal() throws IOException {
+        // Columnas al revés que lo normal: la cabecera dice que la primera es el ECG
+        Path file = tempDir.resolve("reversed.txt");
+        Files.writeString(file, "ECG_adc,EMG_adc\n500,10\n510,20\n");
+
+        int[][] samples = RecordingFileWriter.readAll(file.toString());
+        assertArrayEquals(new int[]{10, 20}, samples[RecordingFileWriter.EMG_ROW]);
+        assertArrayEquals(new int[]{500, 510}, samples[RecordingFileWriter.ECG_ROW]);
+    }
+
+    @Test
+    void readAllWithOnlyEcgInTheHeaderLeavesEmgAtZero() throws IOException {
+        Path file = tempDir.resolve("ecg_header.txt");
+        Files.writeString(file, "ECG_adc\n500\n510\n");
+
+        int[][] samples = RecordingFileWriter.readAll(file.toString());
+        assertArrayEquals(new int[]{0, 0}, samples[RecordingFileWriter.EMG_ROW]);
+        assertArrayEquals(new int[]{500, 510}, samples[RecordingFileWriter.ECG_ROW]);
     }
 
     @Test
