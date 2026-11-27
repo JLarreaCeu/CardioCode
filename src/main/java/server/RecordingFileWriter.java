@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
+import java.text.Normalizer;
 
 
 public class RecordingFileWriter implements AutoCloseable {
@@ -24,15 +25,15 @@ public class RecordingFileWriter implements AutoCloseable {
     private Path filePath;
 
 
-    public String open(int patientId) throws IOException {
+    public String open(String name, String surname) throws IOException {
         if (writer != null) {
 
             throw new IllegalStateException("A recording is already open: " + filePath);
         }
         Files.createDirectories(RECORDINGS_DIR);
 
-        // recordings/patient3_2026-11-22_19-12-05.txt
-        String fileName = "patient" + patientId + "_" + LocalDateTime.now().format(FILE_DATE) + ".txt";
+        // recordings/Maria-Jose_Cuevas-Alonso_2026-11-22_19-12-05.txt
+        String fileName = cleanName(name) + "_" + cleanName(surname) + "_" + LocalDateTime.now().format(FILE_DATE) + ".txt";
         filePath = RECORDINGS_DIR.resolve(fileName);
 
         writer = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8,
@@ -106,5 +107,19 @@ public class RecordingFileWriter implements AutoCloseable {
             }
         }
         return new int [][]{Arrays.copyOf(emg, count),Arrays.copyOf(ecg,count)};
+    }
+
+    private String cleanName(String text) {
+        if (text == null) {
+            return "unknown";
+        }
+        String clean = Normalizer.normalize(text.trim(), Normalizer.Form.NFD);
+        clean = clean.replaceAll("\\p{M}", "");
+        clean = clean.replaceAll("[^A-Za-z0-9]+", "-");
+        clean = clean.replaceAll("^-|-$", "");
+        if (clean.isEmpty()) {
+            return "unknown";
+        }
+        return clean;
     }
 }

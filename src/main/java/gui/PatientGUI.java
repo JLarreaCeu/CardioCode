@@ -211,7 +211,7 @@ public class PatientGUI {
                 try {
                     session = patientClient.startECGRecording(recorder, 30, new RecordingSession.Listener() {
                         @Override
-                        public void onBlock(int[] samples) {
+                        public void onBlock(int[][] samples) {
                             Platform.runLater(() ->
                                     status.setText("Recording... " + (int) session.getRecorderSeconds() + " s"));
                         }
